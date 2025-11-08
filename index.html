@@ -1,0 +1,1355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Catch Money</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(to bottom, #87CEEB, #E0F6FF);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .game-container {
+            text-align: center;
+        }
+
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .scoreboard {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .score-item {
+            display: inline-block;
+            margin: 0 15px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .timer {
+            font-size: 24px;
+            color: #e74c3c;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+
+        canvas {
+            border: 4px solid #34495e;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.5);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+        }
+
+        .controls {
+            margin-top: 15px;
+            color: #2c3e50;
+            font-size: 16px;
+        }
+
+        .game-over {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            text-align: center;
+            z-index: 10;
+        }
+
+        .game-over h2 {
+            color: #e74c3c;
+            margin-bottom: 20px;
+        }
+
+        .game-over button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 18px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 15px;
+        }
+
+        .game-over button:hover {
+            background: #2980b9;
+        }
+
+        .start-screen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 50px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            text-align: center;
+            z-index: 10;
+        }
+
+        .start-screen h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+
+        .start-screen p {
+            color: #7f8c8d;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+
+        .start-screen button {
+            background: #27ae60;
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .start-screen button:hover {
+            background: #229954;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>Catch Money!</h1>
+
+        <div class="scoreboard">
+            <div class="score-item">💎 Diamonds: <span id="diamond-count">0</span></div>
+            <div class="score-item">🔶 Orange Diamonds: <span id="hexagon-count">0</span></div>
+            <div class="score-item">💵 $100 Bills: <span id="bill-count">0</span></div>
+        </div>
+
+        <div class="timer">Time: <span id="time">60</span>s</div>
+
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+        <div class="controls">
+            Use ← → Arrow Keys to Move
+        </div>
+    </div>
+
+    <div class="start-screen" id="startScreen">
+        <h2>💰 Catch Money! 💰</h2>
+        <p>Catch diamonds 💎, orange diamonds 🔶, and $100 bills 💵<br>
+        Avoid the bombs 💣 or it's GAME OVER!<br>
+        Power-ups: ⭐ = Big Bucket, 🪙 = Full-Screen Stick!<br>
+        You have 60 seconds!<br><br>
+        Use ← → arrow keys to move</p>
+        <button onclick="startGameFromButton()">Start Game</button>
+    </div>
+
+    <div class="game-over" id="gameOver">
+        <h2 id="gameOverTitle">Time's Up!</h2>
+        <div class="scoreboard">
+            <div class="score-item">💎 Diamonds: <span id="final-diamond">0</span></div>
+            <div class="score-item">🔶 Orange Diamonds: <span id="final-hexagon">0</span></div>
+            <div class="score-item">💵 $100 Bills: <span id="final-bill">0</span></div>
+        </div>
+        <button onclick="restartGame()">Play Again</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Game state
+        let gameActive = false;
+        let gameStarted = false;
+        let timeLeft = 60;
+        let score = {
+            diamonds: 0,
+            hexagons: 0,
+            bills: 0
+        };
+
+        // Explosion animation state
+        let explosionActive = false;
+        let explosionX = 0;
+        let explosionY = 0;
+        let explosionFrame = 0;
+        let explosionParticles = [];
+
+        // Player falling animation
+        let playerFalling = false;
+        let playerRotation = 0;
+        let playerFallSpeed = 0;
+        let playerLyingDown = false;
+
+        // Bucket state
+        let bucketX = 0;
+        let bucketY = 0;
+        let bucketDropped = false;
+        let bucketSize = 1; // 1 = normal, 4 = enlarged
+        let bucketSizeTimer = null;
+
+        // Stick state
+        let stickActive = false;
+        let stickTimer = null;
+
+        // Player object
+        const player = {
+            x: canvas.width / 2 - 30,
+            y: canvas.height - 135, // Adjusted to stand on floor (120 height + 15 floor height)
+            width: 60,
+            height: 120,
+            speed: 5, // Reduced from 7 to 5 for slower movement
+            dx: 0,
+            walkFrame: 0,
+            walkCounter: 0,
+            direction: 'right' // track which direction player is facing
+        };
+
+        // Falling items array
+        let fallingItems = [];
+
+        // Item types
+        const ITEM_TYPES = {
+            DIAMOND: 'diamond',
+            ORANGE_DIAMOND: 'orange_diamond',
+            BILL: 'bill',
+            BOMB: 'bomb',
+            GOLD_BOMB: 'gold_bomb',
+            COIN: 'coin'
+        };
+
+        // Audio context for music and sound effects
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        let backgroundMusic = null;
+
+        // Play catch sound effect
+        function playCatchSound() {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            // Create a pleasant "ding" sound
+            oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(1200, audioContext.currentTime + 0.1);
+
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
+
+            oscillator.type = 'sine';
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.2);
+        }
+
+        // Play VIOLENT explosion sound effect
+        function playExplosionSound() {
+            const now = audioContext.currentTime;
+
+            // Create multiple oscillators for a complex explosion sound
+            for (let i = 0; i < 3; i++) {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+
+                // Very loud, harsh noise
+                oscillator.type = i === 0 ? 'sawtooth' : (i === 1 ? 'square' : 'triangle');
+
+                // Descending frequency for explosion effect
+                oscillator.frequency.setValueAtTime(200 - i * 50, now);
+                oscillator.frequency.exponentialRampToValueAtTime(50, now + 0.3);
+
+                // Very loud with quick decay
+                gainNode.gain.setValueAtTime(0.5, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+
+                oscillator.start(now + i * 0.05);
+                oscillator.stop(now + 0.5);
+            }
+
+            // Add white noise for the "boom"
+            const bufferSize = audioContext.sampleRate * 0.3;
+            const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+            const data = buffer.getChannelData(0);
+
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+
+            const noise = audioContext.createBufferSource();
+            const noiseGain = audioContext.createGain();
+
+            noise.buffer = buffer;
+            noise.connect(noiseGain);
+            noiseGain.connect(audioContext.destination);
+
+            noiseGain.gain.setValueAtTime(0.4, now);
+            noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+
+            noise.start(now);
+        }
+
+        // Create and play background music
+        function playBackgroundMusic() {
+            if (backgroundMusic) {
+                backgroundMusic.stop();
+            }
+
+            // Happy melody notes (C major scale with cheerful progression)
+            const melody = [
+                { freq: 523.25, duration: 0.3 }, // C5
+                { freq: 587.33, duration: 0.3 }, // D5
+                { freq: 659.25, duration: 0.3 }, // E5
+                { freq: 523.25, duration: 0.3 }, // C5
+                { freq: 659.25, duration: 0.3 }, // E5
+                { freq: 523.25, duration: 0.3 }, // C5
+                { freq: 783.99, duration: 0.6 }, // G5
+                { freq: 659.25, duration: 0.3 }, // E5
+                { freq: 587.33, duration: 0.3 }, // D5
+                { freq: 523.25, duration: 0.3 }, // C5
+                { freq: 659.25, duration: 0.3 }, // E5
+                { freq: 783.99, duration: 0.3 }, // G5
+                { freq: 880.00, duration: 0.6 }, // A5
+            ];
+
+            let currentTime = audioContext.currentTime;
+
+            function playMelodyLoop() {
+                if (!gameActive) return;
+
+                melody.forEach((note) => {
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+
+                    oscillator.frequency.value = note.freq;
+                    oscillator.type = 'triangle';
+
+                    gainNode.gain.setValueAtTime(0.1, currentTime);
+                    gainNode.gain.setValueAtTime(0.05, currentTime + note.duration);
+
+                    oscillator.start(currentTime);
+                    oscillator.stop(currentTime + note.duration);
+
+                    currentTime += note.duration;
+                });
+
+                // Loop the melody
+                const totalDuration = melody.reduce((sum, note) => sum + note.duration, 0);
+                setTimeout(() => {
+                    if (gameActive) {
+                        currentTime = audioContext.currentTime;
+                        playMelodyLoop();
+                    }
+                }, totalDuration * 1000);
+            }
+
+            playMelodyLoop();
+        }
+
+        // Stop background music
+        function stopBackgroundMusic() {
+            if (backgroundMusic) {
+                backgroundMusic.stop();
+                backgroundMusic = null;
+            }
+        }
+
+        // Key states
+        const keys = {
+            ArrowLeft: false,
+            ArrowRight: false
+        };
+
+        // Event listeners for keyboard
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                keys[e.key] = true;
+                e.preventDefault();
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                keys[e.key] = false;
+                e.preventDefault();
+            }
+        });
+
+        // Draw player
+        function drawPlayer() {
+            const centerX = player.x + player.width/2;
+            const centerY = player.y + player.height/2;
+            const bottomY = player.y + player.height;
+
+            // Special drawing for lying down dead state
+            if (playerLyingDown) {
+                // Draw player lying flat on the ground
+                const floorY = canvas.height - 15;
+                const lyingY = floorY - 25; // Lying flat on floor
+
+                // Body lying down (horizontal)
+                ctx.fillStyle = '#3498db';
+                ctx.fillRect(player.x + 10, lyingY, 60, 20);
+
+                // Head lying down
+                ctx.fillStyle = '#f39c12';
+                ctx.beginPath();
+                ctx.arc(player.x + 75, lyingY + 10, 12, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Dead eyes (X X)
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(player.x + 69, lyingY + 6);
+                ctx.lineTo(player.x + 73, lyingY + 10);
+                ctx.moveTo(player.x + 73, lyingY + 6);
+                ctx.lineTo(player.x + 69, lyingY + 10);
+                ctx.moveTo(player.x + 77, lyingY + 6);
+                ctx.lineTo(player.x + 81, lyingY + 10);
+                ctx.moveTo(player.x + 81, lyingY + 6);
+                ctx.lineTo(player.x + 77, lyingY + 10);
+                ctx.stroke();
+
+                // Tongue sticking out (dead)
+                ctx.fillStyle = '#ff6b9d';
+                ctx.beginPath();
+                ctx.ellipse(player.x + 75, lyingY + 16, 4, 3, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Arms lying flat HORIZONTALLY to the sides
+                ctx.strokeStyle = '#f39c12';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                // Left arm - horizontal to the left
+                ctx.moveTo(player.x + 10, lyingY + 5);
+                ctx.lineTo(player.x - 15, lyingY + 5);
+                // Right arm - horizontal to the right
+                ctx.moveTo(player.x + 70, lyingY + 5);
+                ctx.lineTo(player.x + 95, lyingY + 5);
+                ctx.stroke();
+
+                // Legs lying flat HORIZONTALLY extending from body
+                ctx.strokeStyle = '#2c3e50';
+                ctx.lineWidth = 5;
+                ctx.beginPath();
+                // Left leg - extending down-left horizontally
+                ctx.moveTo(player.x + 20, lyingY + 20);
+                ctx.lineTo(player.x + 5, lyingY + 20);
+                // Right leg - extending down-right horizontally
+                ctx.moveTo(player.x + 50, lyingY + 20);
+                ctx.lineTo(player.x + 65, lyingY + 20);
+                ctx.stroke();
+
+                // Draw feet at end of horizontal legs
+                ctx.fillStyle = '#34495e';
+                ctx.fillRect(player.x + 5, lyingY + 18, 8, 4);
+                ctx.fillRect(player.x + 65, lyingY + 18, 8, 4);
+
+                return; // Skip the rest of the drawing
+            }
+
+            // If player is falling but not yet lying down, apply rotation
+            if (playerFalling && !playerLyingDown) {
+                ctx.save();
+                ctx.translate(centerX, centerY);
+                ctx.rotate(playerRotation);
+                ctx.translate(-centerX, -centerY);
+            }
+
+            // Body (blue shirt) - taller
+            ctx.fillStyle = '#3498db';
+            ctx.fillRect(player.x + 15, player.y + 20, 30, 35);
+
+            // Head
+            ctx.fillStyle = '#f39c12';
+            ctx.beginPath();
+            ctx.arc(centerX, player.y + 10, 12, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Eyes (X_X if falling, normal if not)
+            ctx.fillStyle = '#000';
+            if (playerFalling) {
+                // Draw X eyes
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(centerX - 6, player.y + 6);
+                ctx.lineTo(centerX - 2, player.y + 10);
+                ctx.moveTo(centerX - 2, player.y + 6);
+                ctx.lineTo(centerX - 6, player.y + 10);
+                ctx.moveTo(centerX + 2, player.y + 6);
+                ctx.lineTo(centerX + 6, player.y + 10);
+                ctx.moveTo(centerX + 6, player.y + 6);
+                ctx.lineTo(centerX + 2, player.y + 10);
+                ctx.stroke();
+
+                // Tongue out when falling
+                ctx.fillStyle = '#ff6b9d';
+                ctx.beginPath();
+                ctx.ellipse(centerX, player.y + 16, 3, 4, 0, 0, Math.PI * 2);
+                ctx.fill();
+            } else {
+                ctx.beginPath();
+                ctx.arc(centerX - 4, player.y + 8, 2, 0, Math.PI * 2);
+                ctx.arc(centerX + 4, player.y + 8, 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Smile (or no mouth if falling)
+            if (!playerFalling) {
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(centerX, player.y + 10, 4, 0, Math.PI);
+                ctx.stroke();
+            }
+
+            // Arms - longer, holding bucket when alive
+            ctx.strokeStyle = '#f39c12';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            if (!playerFalling) {
+                // Left arm - longer, reaching up to bucket
+                ctx.moveTo(player.x + 15, player.y + 25);
+                ctx.lineTo(player.x + 10, player.y + 5);
+                ctx.lineTo(player.x + 15, player.y - 5);
+                // Right arm - longer, reaching up to bucket
+                ctx.moveTo(player.x + 45, player.y + 25);
+                ctx.lineTo(player.x + 50, player.y + 5);
+                ctx.lineTo(player.x + 45, player.y - 5);
+            } else {
+                // Arms flailing when falling
+                ctx.moveTo(player.x + 15, player.y + 25);
+                ctx.lineTo(player.x + 5, player.y + 15);
+                ctx.moveTo(player.x + 45, player.y + 25);
+                ctx.lineTo(player.x + 55, player.y + 15);
+            }
+            ctx.stroke();
+
+            // Pants
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillRect(player.x + 15, player.y + 55, 30, 10);
+
+            // Legs - animate based on walkFrame - MUCH LONGER NOW
+            ctx.strokeStyle = '#2c3e50';
+            ctx.lineWidth = 5;
+            ctx.lineCap = 'round';
+
+            if (player.dx === 0 && !playerFalling) {
+                // Standing still - legs together
+                ctx.beginPath();
+                ctx.moveTo(player.x + 22, player.y + 65);
+                ctx.lineTo(player.x + 22, bottomY);
+                ctx.moveTo(player.x + 38, player.y + 65);
+                ctx.lineTo(player.x + 38, bottomY);
+                ctx.stroke();
+
+                // Feet
+                ctx.fillStyle = '#34495e';
+                ctx.fillRect(player.x + 18, bottomY - 4, 10, 4);
+                ctx.fillRect(player.x + 34, bottomY - 4, 10, 4);
+            } else if (playerFalling) {
+                // Falling - legs flailing
+                ctx.beginPath();
+                ctx.moveTo(player.x + 22, player.y + 65);
+                ctx.lineTo(player.x + 10, bottomY - 10);
+                ctx.moveTo(player.x + 38, player.y + 65);
+                ctx.lineTo(player.x + 50, bottomY - 15);
+                ctx.stroke();
+
+                // Feet
+                ctx.fillStyle = '#34495e';
+                ctx.fillRect(player.x + 6, bottomY - 14, 10, 4);
+                ctx.fillRect(player.x + 46, bottomY - 19, 10, 4);
+            } else {
+                // Walking animation - legs alternate
+                ctx.beginPath();
+                if (player.walkFrame === 0) {
+                    // Left leg forward, right leg back
+                    ctx.moveTo(player.x + 22, player.y + 65);
+                    ctx.lineTo(player.x + 16, bottomY);
+                    ctx.moveTo(player.x + 38, player.y + 65);
+                    ctx.lineTo(player.x + 44, bottomY);
+
+                    ctx.stroke();
+
+                    // Feet
+                    ctx.fillStyle = '#34495e';
+                    ctx.fillRect(player.x + 12, bottomY - 4, 10, 4);
+                    ctx.fillRect(player.x + 40, bottomY - 4, 10, 4);
+                } else {
+                    // Right leg forward, left leg back
+                    ctx.moveTo(player.x + 22, player.y + 65);
+                    ctx.lineTo(player.x + 28, bottomY);
+                    ctx.moveTo(player.x + 38, player.y + 65);
+                    ctx.lineTo(player.x + 32, bottomY);
+
+                    ctx.stroke();
+
+                    // Feet
+                    ctx.fillStyle = '#34495e';
+                    ctx.fillRect(player.x + 24, bottomY - 4, 10, 4);
+                    ctx.fillRect(player.x + 28, bottomY - 4, 10, 4);
+                }
+            }
+
+            if (playerFalling && !playerLyingDown) {
+                ctx.restore();
+            }
+
+            // Update walk animation
+            if (player.dx !== 0 && !playerFalling) {
+                player.walkCounter++;
+                if (player.walkCounter > 8) { // Change frame every 8 game loops
+                    player.walkFrame = (player.walkFrame + 1) % 2;
+                    player.walkCounter = 0;
+                }
+            } else {
+                player.walkFrame = 0;
+                player.walkCounter = 0;
+            }
+        }
+
+        // Draw diamond
+        function drawDiamond(x, y, size) {
+            ctx.font = `${size * 2}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('💎', x, y);
+        }
+
+        // Draw orange diamond
+        function drawOrangeDiamond(x, y, size) {
+            ctx.font = `${size * 2}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('🔶', x, y);
+        }
+
+        // Draw dollar bill
+        function drawBill(x, y, width, height) {
+            ctx.font = `${height * 1.5}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('💵', x, y);
+        }
+
+        // Draw bomb
+        function drawBomb(x, y, size) {
+            ctx.font = `${size * 2}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('💣', x, y);
+        }
+
+        // Draw gold bomb
+        function drawGoldBomb(x, y, size) {
+            // Draw a glowing gold bomb
+            ctx.save();
+
+            // Glow effect
+            ctx.shadowColor = '#ffd700';
+            ctx.shadowBlur = 15;
+
+            // Gold circle background
+            ctx.fillStyle = '#ffd700';
+            ctx.beginPath();
+            ctx.arc(x, y, size * 0.8, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Star/sparkle pattern
+            ctx.fillStyle = '#ffed4e';
+            ctx.beginPath();
+            for (let i = 0; i < 5; i++) {
+                const angle = (i * 4 * Math.PI) / 5 - Math.PI / 2;
+                const outerX = x + Math.cos(angle) * size * 0.6;
+                const outerY = y + Math.sin(angle) * size * 0.6;
+                const innerAngle = angle + (2 * Math.PI) / 10;
+                const innerX = x + Math.cos(innerAngle) * size * 0.3;
+                const innerY = y + Math.sin(innerAngle) * size * 0.3;
+
+                if (i === 0) {
+                    ctx.moveTo(outerX, outerY);
+                } else {
+                    ctx.lineTo(outerX, outerY);
+                }
+                ctx.lineTo(innerX, innerY);
+            }
+            ctx.closePath();
+            ctx.fill();
+
+            // Text overlay
+            ctx.shadowBlur = 0;
+            ctx.font = `bold ${size * 1.2}px Arial`;
+            ctx.fillStyle = '#fff';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('⭐', x, y);
+
+            ctx.restore();
+        }
+
+        // Draw coin
+        function drawCoin(x, y, size) {
+            ctx.font = `${size * 2}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('🪙', x, y);
+        }
+
+        // Draw bucket
+        function drawBucket(x, y, isOnGround = false, size = 1) {
+            if (isOnGround) {
+                // Bucket lying on ground (tipped over)
+                ctx.save();
+                ctx.translate(x, y);
+                ctx.rotate(Math.PI / 2.5); // Tilt the bucket
+
+                const w = 12 * size;
+                const h = 8 * size;
+
+                // Bucket body
+                ctx.fillStyle = bucketSize > 1 ? '#ffd700' : '#cd853f'; // Gold if enlarged, brown if normal
+                ctx.beginPath();
+                ctx.moveTo(-w, -h);
+                ctx.lineTo(-h, h);
+                ctx.lineTo(h, h);
+                ctx.lineTo(w, -h);
+                ctx.closePath();
+                ctx.fill();
+
+                // Bucket rim
+                ctx.fillStyle = bucketSize > 1 ? '#daa520' : '#8b6914';
+                ctx.fillRect(-w, -h - 2, w * 2, 3);
+
+                // Handle
+                ctx.strokeStyle = bucketSize > 1 ? '#daa520' : '#8b6914';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(0, -h, h, Math.PI, 0, true);
+                ctx.stroke();
+
+                ctx.restore();
+            } else {
+                // Bucket held above head
+                const baseWidth = 15 * size;
+                const baseHeight = 15 * size;
+
+                // Bucket body
+                ctx.fillStyle = bucketSize > 1 ? '#ffd700' : '#cd853f'; // Gold if enlarged, brown if normal
+                ctx.beginPath();
+                ctx.moveTo(x - baseWidth, y);
+                ctx.lineTo(x - (baseWidth * 0.8), y + baseHeight);
+                ctx.lineTo(x + (baseWidth * 0.8), y + baseHeight);
+                ctx.lineTo(x + baseWidth, y);
+                ctx.closePath();
+                ctx.fill();
+
+                // Bucket rim
+                ctx.fillStyle = bucketSize > 1 ? '#daa520' : '#8b6914';
+                ctx.fillRect(x - baseWidth, y - 2, baseWidth * 2, 3);
+
+                // Handle
+                ctx.strokeStyle = bucketSize > 1 ? '#daa520' : '#8b6914';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(x, y, 10 * size, Math.PI, 0, true);
+                ctx.stroke();
+
+                // Add sparkles if enlarged
+                if (bucketSize > 1) {
+                    ctx.fillStyle = '#fff';
+                    ctx.beginPath();
+                    ctx.arc(x - baseWidth * 0.5, y + 5, 2, 0, Math.PI * 2);
+                    ctx.arc(x + baseWidth * 0.5, y + 5, 2, 0, Math.PI * 2);
+                    ctx.arc(x, y - 5, 2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        }
+
+        // Draw stick (full screen width)
+        function drawStick(playerCenterX, playerY) {
+            // Draw a long horizontal stick spanning the entire screen
+            const stickY = playerY - 15;
+            const stickHeight = 8;
+
+            // Stick body - brown wood color
+            ctx.fillStyle = '#8b4513';
+            ctx.fillRect(0, stickY, canvas.width, stickHeight);
+
+            // Add some texture/grain to the stick
+            ctx.strokeStyle = '#654321';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < canvas.width; i += 20) {
+                ctx.beginPath();
+                ctx.moveTo(i, stickY);
+                ctx.lineTo(i, stickY + stickHeight);
+                ctx.stroke();
+            }
+
+            // Highlight where player is holding it
+            ctx.fillStyle = '#daa520';
+            ctx.fillRect(playerCenterX - 15, stickY - 3, 30, stickHeight + 6);
+        }
+
+        // Create explosion particles
+        function createExplosion(x, y) {
+            explosionX = x;
+            explosionY = y;
+            explosionFrame = 0;
+            explosionActive = true;
+            explosionParticles = [];
+
+            // Create explosion particles
+            for (let i = 0; i < 30; i++) {
+                const angle = (Math.PI * 2 * i) / 30;
+                const speed = 3 + Math.random() * 5;
+                explosionParticles.push({
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    life: 60,
+                    size: 5 + Math.random() * 5,
+                    color: ['#ff6b6b', '#f39c12', '#e74c3c', '#f1c40f'][Math.floor(Math.random() * 4)]
+                });
+            }
+        }
+
+        // Draw explosion animation
+        function drawExplosion() {
+            if (!explosionActive) return;
+
+            explosionFrame++;
+
+            // Draw expanding circles
+            const maxRadius = 100;
+            const currentRadius = (explosionFrame / 30) * maxRadius;
+
+            if (explosionFrame < 30) {
+                // Main explosion flash
+                ctx.fillStyle = `rgba(255, 165, 0, ${1 - explosionFrame / 30})`;
+                ctx.beginPath();
+                ctx.arc(explosionX, explosionY, currentRadius, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = `rgba(255, 69, 0, ${1 - explosionFrame / 30})`;
+                ctx.beginPath();
+                ctx.arc(explosionX, explosionY, currentRadius * 0.7, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = `rgba(255, 255, 0, ${1 - explosionFrame / 30})`;
+                ctx.beginPath();
+                ctx.arc(explosionX, explosionY, currentRadius * 0.4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Draw and update particles
+            explosionParticles.forEach((particle, index) => {
+                particle.x += particle.vx;
+                particle.y += particle.vy;
+                particle.vy += 0.2; // gravity
+                particle.life--;
+
+                const alpha = particle.life / 60;
+                ctx.fillStyle = particle.color.replace(')', `, ${alpha})`).replace('rgb', 'rgba');
+                ctx.beginPath();
+                ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+                ctx.fill();
+
+                if (particle.life <= 0) {
+                    explosionParticles.splice(index, 1);
+                }
+            });
+
+            // End explosion animation
+            if (explosionFrame > 60 && explosionParticles.length === 0) {
+                explosionActive = false;
+            }
+        }
+
+        // Create falling item
+        function createFallingItem() {
+            const types = [
+                ITEM_TYPES.DIAMOND,
+                ITEM_TYPES.ORANGE_DIAMOND,
+                ITEM_TYPES.BILL,
+                ITEM_TYPES.BOMB,
+                ITEM_TYPES.GOLD_BOMB,
+                ITEM_TYPES.COIN
+            ];
+            const type = types[Math.floor(Math.random() * types.length)];
+
+            // Coins fall much faster (3x-4x speed)
+            let speed = 1 + Math.random() * 1.5;
+            if (type === ITEM_TYPES.COIN) {
+                speed = 3 + Math.random() * 2; // 3-5 speed for coins (much faster!)
+            }
+
+            fallingItems.push({
+                x: Math.random() * (canvas.width - 60) + 30,
+                y: -30,
+                type: type,
+                speed: speed,
+                size: type === ITEM_TYPES.BILL ? 40 : 25
+            });
+        }
+
+        // Update player position
+        function updatePlayer() {
+            player.dx = 0;
+
+            if (keys.ArrowLeft) {
+                player.dx = -player.speed;
+            }
+            if (keys.ArrowRight) {
+                player.dx = player.speed;
+            }
+
+            player.x += player.dx;
+
+            // Boundary checking
+            if (player.x < 0) player.x = 0;
+            if (player.x + player.width > canvas.width) {
+                player.x = canvas.width - player.width;
+            }
+        }
+
+        // Update falling items
+        function updateFallingItems() {
+            for (let i = fallingItems.length - 1; i >= 0; i--) {
+                fallingItems[i].y += fallingItems[i].speed;
+
+                // Check collision with player
+                if (checkCollision(fallingItems[i], player)) {
+                    // Check if it's a bomb
+                    if (fallingItems[i].type === ITEM_TYPES.BOMB) {
+                        // GAME OVER - BOMB HIT!
+                        gameActive = false;
+                        playExplosionSound();
+
+                        // Create explosion at player position
+                        createExplosion(player.x + player.width/2, player.y + player.height/2);
+
+                        // Remove the bomb from the screen
+                        fallingItems.splice(i, 1);
+
+                        // Drop the bucket!
+                        bucketDropped = true;
+                        bucketX = player.x + player.width/2 + 20; // Bucket falls to the side
+                        bucketY = canvas.height - 30; // On the ground
+
+                        // Start player falling
+                        playerFalling = true;
+                        playerFallSpeed = 0;
+                        playerRotation = 0;
+                        playerLyingDown = false;
+
+                        // Stop spawning and timer
+                        clearInterval(timerInterval);
+                        clearInterval(spawnInterval);
+                        stopBackgroundMusic();
+
+                        // Wait for animation to finish before showing game over
+                        setTimeout(() => {
+                            document.getElementById('gameOverTitle').textContent = '💥 BOOM! Game Over! 💥';
+                            document.getElementById('final-diamond').textContent = score.diamonds;
+                            document.getElementById('final-hexagon').textContent = score.hexagons;
+                            document.getElementById('final-bill').textContent = score.bills;
+                            document.getElementById('gameOver').style.display = 'block';
+                        }, 3000);
+
+                        return;
+                    }
+
+                    // Check if it's a gold bomb (power-up!)
+                    if (fallingItems[i].type === ITEM_TYPES.GOLD_BOMB) {
+                        // Power up! Enlarge bucket
+                        playCatchSound();
+
+                        // Clear existing timer if any
+                        if (bucketSizeTimer) {
+                            clearTimeout(bucketSizeTimer);
+                        }
+
+                        // Enlarge bucket
+                        bucketSize = 4;
+
+                        // Set timer to reset bucket size after 10 seconds
+                        bucketSizeTimer = setTimeout(() => {
+                            bucketSize = 1;
+                            bucketSizeTimer = null;
+                        }, 10000);
+
+                        fallingItems.splice(i, 1);
+                        continue;
+                    }
+
+                    // Check if it's a coin (stick power-up!)
+                    if (fallingItems[i].type === ITEM_TYPES.COIN) {
+                        // Power up! Activate stick
+                        playCatchSound();
+
+                        // Clear existing timer if any
+                        if (stickTimer) {
+                            clearTimeout(stickTimer);
+                        }
+
+                        // Activate stick (replaces bucket)
+                        stickActive = true;
+
+                        // Set timer to deactivate stick after 10 seconds
+                        stickTimer = setTimeout(() => {
+                            stickActive = false;
+                            stickTimer = null;
+                        }, 10000);
+
+                        fallingItems.splice(i, 1);
+                        continue;
+                    }
+
+                    // Play catch sound
+                    playCatchSound();
+
+                    // Update score
+                    if (fallingItems[i].type === ITEM_TYPES.DIAMOND) {
+                        score.diamonds++;
+                        document.getElementById('diamond-count').textContent = score.diamonds;
+                    } else if (fallingItems[i].type === ITEM_TYPES.ORANGE_DIAMOND) {
+                        score.hexagons++;
+                        document.getElementById('hexagon-count').textContent = score.hexagons;
+                    } else if (fallingItems[i].type === ITEM_TYPES.BILL) {
+                        score.bills++;
+                        document.getElementById('bill-count').textContent = score.bills;
+                    }
+
+                    fallingItems.splice(i, 1);
+                } else if (fallingItems[i].y > canvas.height) {
+                    // Remove items that fell off screen
+                    fallingItems.splice(i, 1);
+                }
+            }
+        }
+
+        // Check collision
+        function checkCollision(item, player) {
+            const itemLeft = item.x - item.size/2;
+            const itemRight = item.x + item.size/2;
+            const itemTop = item.y - item.size/2;
+            const itemBottom = item.y + item.size/2;
+
+            let playerLeft = player.x;
+            let playerRight = player.x + player.width;
+            let playerTop = player.y;
+            let playerBottom = player.y + player.height;
+
+            // Stick mode: full screen width collision
+            if (stickActive && !bucketDropped) {
+                // Stick only catches specific items
+                if (item.type !== ITEM_TYPES.DIAMOND &&
+                    item.type !== ITEM_TYPES.ORANGE_DIAMOND &&
+                    item.type !== ITEM_TYPES.BILL) {
+                    return false; // Stick doesn't catch this type
+                }
+
+                // Stick spans entire screen width
+                playerLeft = 0;
+                playerRight = canvas.width;
+                playerTop = player.y - 25; // Stick position
+                playerBottom = player.y - 15;
+
+                return itemRight > playerLeft &&
+                       itemLeft < playerRight &&
+                       itemBottom > playerTop &&
+                       itemTop < playerBottom;
+            }
+
+            // Expand collision area when bucket is enlarged
+            if (bucketSize > 1 && !bucketDropped && !stickActive) {
+                // Bucket is held above head, so expand the top collision area
+                const bucketWidth = 15 * bucketSize;
+                const bucketHeight = 15 * bucketSize;
+                const centerX = player.x + player.width/2;
+                playerLeft = centerX - bucketWidth;
+                playerRight = centerX + bucketWidth;
+                // Account for higher bucket position when enlarged
+                playerTop = player.y - 50 - bucketHeight; // Bucket is positioned higher and is taller
+            }
+
+            return itemRight > playerLeft &&
+                   itemLeft < playerRight &&
+                   itemBottom > playerTop &&
+                   itemTop < playerBottom;
+        }
+
+        // Draw falling items
+        function drawFallingItems() {
+            fallingItems.forEach(item => {
+                if (item.type === ITEM_TYPES.DIAMOND) {
+                    drawDiamond(item.x, item.y, item.size);
+                } else if (item.type === ITEM_TYPES.ORANGE_DIAMOND) {
+                    drawOrangeDiamond(item.x, item.y, item.size);
+                } else if (item.type === ITEM_TYPES.BILL) {
+                    drawBill(item.x, item.y, item.size * 1.5, item.size);
+                } else if (item.type === ITEM_TYPES.BOMB) {
+                    drawBomb(item.x, item.y, item.size);
+                } else if (item.type === ITEM_TYPES.GOLD_BOMB) {
+                    drawGoldBomb(item.x, item.y, item.size);
+                } else if (item.type === ITEM_TYPES.COIN) {
+                    drawCoin(item.x, item.y, item.size);
+                }
+            });
+        }
+
+        // Clear canvas
+        function clear() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // Draw floor/ground
+        function drawFloor() {
+            const floorHeight = 10;
+            const floorY = canvas.height - floorHeight;
+
+            // Draw ground
+            ctx.fillStyle = '#8B4513'; // Brown color
+            ctx.fillRect(0, floorY, canvas.width, floorHeight);
+
+            // Draw grass on top
+            ctx.fillStyle = '#228B22'; // Green grass
+            ctx.fillRect(0, floorY - 5, canvas.width, 5);
+
+            // Add some grass details
+            ctx.strokeStyle = '#2E8B57';
+            ctx.lineWidth = 2;
+            for (let i = 0; i < canvas.width; i += 15) {
+                ctx.beginPath();
+                ctx.moveTo(i, floorY);
+                ctx.lineTo(i + 3, floorY - 8);
+                ctx.moveTo(i + 7, floorY);
+                ctx.lineTo(i + 10, floorY - 6);
+                ctx.stroke();
+            }
+        }
+
+        // Game loop
+        function gameLoop() {
+            clear();
+            drawFloor(); // Always draw the floor first (background layer)
+
+            // Draw bucket on ground if dropped
+            if (bucketDropped) {
+                drawBucket(bucketX, bucketY, true, bucketSize);
+            }
+
+            if (!gameActive && !explosionActive && !playerFalling) {
+                // Even when game is not active, show the player standing
+                if (gameStarted) {
+                    drawPlayer();
+                    // Draw stick or bucket above player's head if not dropped
+                    if (!bucketDropped) {
+                        if (stickActive) {
+                            drawStick(player.x + player.width/2, player.y);
+                        } else {
+                            const bucketX = player.x + player.width/2;
+                            // Position bucket higher when enlarged to avoid covering face
+                            const bucketY = player.y - 10 - (bucketSize > 1 ? 40 : 0);
+                            drawBucket(bucketX, bucketY, false, bucketSize);
+                        }
+                    }
+                }
+                requestAnimationFrame(gameLoop);
+                return;
+            }
+
+            drawFallingItems();
+
+            // Update and draw player falling animation
+            if (playerFalling) {
+                playerFallSpeed += 0.5; // gravity
+                player.y += playerFallSpeed;
+
+                // Spin for about 2.5 rotations (5 * PI), then lie down at 90 degrees
+                if (!playerLyingDown) {
+                    if (playerRotation < Math.PI * 5) {
+                        playerRotation += 0.15; // spin while falling
+                    } else {
+                        // Stop spinning and lie down
+                        playerRotation = Math.PI / 2; // 90 degrees (lying on side)
+                        playerLyingDown = true;
+                    }
+                }
+
+                // Stop falling when hits ground (adjusted for floor height)
+                const floorY = canvas.height - 15; // Account for floor visual height
+                if (player.y + player.height >= floorY) {
+                    player.y = floorY - player.height;
+                    playerFallSpeed = 0;
+                }
+            }
+
+            drawPlayer();
+
+            // Draw stick or bucket above player's head if alive and not dropped
+            if (!bucketDropped && !playerFalling) {
+                if (stickActive) {
+                    drawStick(player.x + player.width/2, player.y);
+                } else {
+                    const bucketX = player.x + player.width/2;
+                    // Position bucket higher when enlarged to avoid covering face/arms
+                    const bucketY = player.y - 10 - (bucketSize > 1 ? 40 : 0);
+                    drawBucket(bucketX, bucketY, false, bucketSize);
+                }
+            }
+
+            drawExplosion();
+
+            if (!playerFalling) {
+                updatePlayer();
+                updateFallingItems();
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Timer countdown
+        let timerInterval;
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                document.getElementById('time').textContent = timeLeft;
+
+                if (timeLeft <= 0) {
+                    endGame();
+                }
+            }, 1000);
+        }
+
+        // Item spawn interval
+        let spawnInterval;
+        function startSpawning() {
+            spawnInterval = setInterval(() => {
+                createFallingItem();
+            }, 800);
+        }
+
+        // End game
+        function endGame() {
+            gameActive = false;
+            clearInterval(timerInterval);
+            clearInterval(spawnInterval);
+            stopBackgroundMusic();
+
+            document.getElementById('gameOverTitle').textContent = "Time's Up!";
+            document.getElementById('final-diamond').textContent = score.diamonds;
+            document.getElementById('final-hexagon').textContent = score.hexagons;
+            document.getElementById('final-bill').textContent = score.bills;
+
+            document.getElementById('gameOver').style.display = 'block';
+        }
+
+        // Start game from button
+        function startGameFromButton() {
+            document.getElementById('startScreen').style.display = 'none';
+            startGame();
+        }
+
+        // Restart game
+        function restartGame() {
+            // IMPORTANT: Clear all existing intervals first to prevent speed issues
+            clearInterval(timerInterval);
+            clearInterval(spawnInterval);
+            if (bucketSizeTimer) {
+                clearTimeout(bucketSizeTimer);
+            }
+            if (stickTimer) {
+                clearTimeout(stickTimer);
+            }
+            stopBackgroundMusic();
+
+            gameActive = true;
+            timeLeft = 60;
+            score = { diamonds: 0, hexagons: 0, bills: 0 };
+            fallingItems = [];
+
+            // Reset explosion and falling states
+            explosionActive = false;
+            explosionParticles = [];
+            playerFalling = false;
+            playerRotation = 0;
+            playerFallSpeed = 0;
+            playerLyingDown = false;
+
+            // Reset bucket
+            bucketDropped = false;
+            bucketX = 0;
+            bucketY = 0;
+            bucketSize = 1;
+            bucketSizeTimer = null;
+
+            // Reset stick
+            stickActive = false;
+            stickTimer = null;
+
+            // Reset player position
+            player.x = canvas.width / 2 - 30;
+            player.y = canvas.height - 135; // Stand on floor
+
+            document.getElementById('diamond-count').textContent = 0;
+            document.getElementById('hexagon-count').textContent = 0;
+            document.getElementById('bill-count').textContent = 0;
+            document.getElementById('time').textContent = 60;
+
+            document.getElementById('gameOver').style.display = 'none';
+
+            startGame();
+        }
+
+        // Start game
+        function startGame() {
+            gameActive = true;
+            gameStarted = true;
+            playBackgroundMusic();
+            // DON'T call gameLoop() here - it's already running from window.onload
+            startTimer();
+            startSpawning();
+        }
+
+        // Start game loop on load - this is the ONLY place gameLoop should be called
+        window.onload = () => {
+            gameLoop(); // Start the animation loop for rendering
+        };
+    </script>
+</body>
+</html>
