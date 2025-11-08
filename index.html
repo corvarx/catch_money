@@ -1736,17 +1736,30 @@
             }
 
             if (!gameActive && !explosionActive && !playerFalling) {
-                // Even when game is not active, show the player standing
+                // Even when game is not active, show both players standing
                 if (gameStarted) {
-                    drawPlayer();
+                    // Draw both players
+                    if (player1.alive) {
+                        const oldPlayer = player;
+                        player = player1;
+                        drawPlayer();
+                        player = oldPlayer;
+                    }
+                    if (player2.alive) {
+                        const oldPlayer = player;
+                        player = player2;
+                        drawPlayer();
+                        player = oldPlayer;
+                    }
+
                     // Draw stick or bucket above player's head if not dropped
                     if (!bucketDropped) {
                         if (stickActive) {
-                            drawStick(player.x + player.width/2, player.y);
+                            drawStick(player1.x + player1.width/2, player1.y);
                         } else {
-                            const bucketX = player.x + player.width/2;
+                            const bucketX = player1.x + player1.width/2;
                             // Position bucket higher when enlarged to avoid covering face
-                            const bucketY = player.y - 10 - (bucketSize > 1 ? 40 : 0);
+                            const bucketY = player1.y - 10 - (bucketSize > 1 ? 40 : 0);
                             drawBucket(bucketX, bucketY, false, bucketSize);
                         }
                     }
@@ -1795,15 +1808,23 @@
                 player = oldPlayer;
             }
 
-            // Draw stick or bucket above player's head if alive and not dropped
+            // Draw stick or bucket above both players' heads if alive and not dropped
             if (!bucketDropped && !playerFalling) {
                 if (stickActive) {
-                    drawStick(player.x + player.width/2, player.y);
+                    // Stick is full screen, so just draw it once
+                    drawStick(player1.x + player1.width/2, player1.y);
                 } else {
-                    const bucketX = player.x + player.width/2;
-                    // Position bucket higher when enlarged to avoid covering face/arms
-                    const bucketY = player.y - 10 - (bucketSize > 1 ? 40 : 0);
-                    drawBucket(bucketX, bucketY, false, bucketSize);
+                    // Draw bucket for both players
+                    if (player1.alive) {
+                        const bucketX1 = player1.x + player1.width/2;
+                        const bucketY1 = player1.y - 10 - (bucketSize > 1 ? 40 : 0);
+                        drawBucket(bucketX1, bucketY1, false, bucketSize);
+                    }
+                    if (player2.alive) {
+                        const bucketX2 = player2.x + player2.width/2;
+                        const bucketY2 = player2.y - 10 - (bucketSize > 1 ? 40 : 0);
+                        drawBucket(bucketX2, bucketY2, false, bucketSize);
+                    }
                 }
             }
 
