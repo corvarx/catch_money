@@ -316,34 +316,72 @@
             noise.start(now);
         }
 
-        // Create and play background music
+        // Create and play background music with multiple instruments
         function playBackgroundMusic() {
             if (backgroundMusic) {
                 backgroundMusic.stop();
             }
 
-            // Happy melody notes (C major scale with cheerful progression)
+            // Upbeat melody in C major (more exciting!)
             const melody = [
-                { freq: 523.25, duration: 0.3 }, // C5
-                { freq: 587.33, duration: 0.3 }, // D5
-                { freq: 659.25, duration: 0.3 }, // E5
-                { freq: 523.25, duration: 0.3 }, // C5
-                { freq: 659.25, duration: 0.3 }, // E5
-                { freq: 523.25, duration: 0.3 }, // C5
-                { freq: 783.99, duration: 0.6 }, // G5
-                { freq: 659.25, duration: 0.3 }, // E5
-                { freq: 587.33, duration: 0.3 }, // D5
-                { freq: 523.25, duration: 0.3 }, // C5
-                { freq: 659.25, duration: 0.3 }, // E5
-                { freq: 783.99, duration: 0.3 }, // G5
-                { freq: 880.00, duration: 0.6 }, // A5
+                { freq: 523.25, duration: 0.2 }, // C5
+                { freq: 659.25, duration: 0.2 }, // E5
+                { freq: 783.99, duration: 0.2 }, // G5
+                { freq: 880.00, duration: 0.2 }, // A5
+                { freq: 783.99, duration: 0.2 }, // G5
+                { freq: 659.25, duration: 0.2 }, // E5
+                { freq: 783.99, duration: 0.4 }, // G5
+                { freq: 659.25, duration: 0.2 }, // E5
+                { freq: 587.33, duration: 0.2 }, // D5
+                { freq: 659.25, duration: 0.2 }, // E5
+                { freq: 523.25, duration: 0.2 }, // C5
+                { freq: 587.33, duration: 0.2 }, // D5
+                { freq: 523.25, duration: 0.4 }, // C5
             ];
 
-            let currentTime = audioContext.currentTime;
+            // Bass line (one octave lower)
+            const bass = [
+                { freq: 130.81, duration: 0.4 }, // C3
+                { freq: 164.81, duration: 0.4 }, // E3
+                { freq: 195.99, duration: 0.4 }, // G3
+                { freq: 164.81, duration: 0.4 }, // E3
+                { freq: 146.83, duration: 0.4 }, // D3
+                { freq: 164.81, duration: 0.4 }, // E3
+                { freq: 130.81, duration: 0.8 }, // C3
+            ];
 
-            function playMelodyLoop() {
+            // Chord progression (3-note chords)
+            const chords = [
+                { freqs: [261.63, 329.63, 392.00], duration: 0.8 }, // C major (C4-E4-G4)
+                { freqs: [293.66, 369.99, 440.00], duration: 0.8 }, // D minor (D4-F4-A4)
+                { freqs: [196.00, 246.94, 293.66], duration: 0.8 }, // G major (G3-B3-D4)
+                { freqs: [261.63, 329.63, 392.00], duration: 0.8 }, // C major (C4-E4-G4)
+            ];
+
+            // Percussion pattern (kick and hi-hat)
+            const percussionPattern = [
+                { type: 'kick', time: 0.0 },
+                { type: 'hihat', time: 0.2 },
+                { type: 'hihat', time: 0.4 },
+                { type: 'kick', time: 0.6 },
+                { type: 'hihat', time: 0.8 },
+                { type: 'hihat', time: 1.0 },
+                { type: 'kick', time: 1.2 },
+                { type: 'hihat', time: 1.4 },
+                { type: 'hihat', time: 1.6 },
+                { type: 'kick', time: 1.8 },
+                { type: 'hihat', time: 2.0 },
+                { type: 'hihat', time: 2.2 },
+            ];
+
+            let startTime = audioContext.currentTime;
+
+            function playMusicLoop() {
                 if (!gameActive) return;
 
+                let currentTime = startTime;
+
+                // Play melody (lead instrument - square wave)
                 melody.forEach((note) => {
                     const oscillator = audioContext.createOscillator();
                     const gainNode = audioContext.createGain();
@@ -352,10 +390,10 @@
                     gainNode.connect(audioContext.destination);
 
                     oscillator.frequency.value = note.freq;
-                    oscillator.type = 'triangle';
+                    oscillator.type = 'square';
 
-                    gainNode.gain.setValueAtTime(0.1, currentTime);
-                    gainNode.gain.setValueAtTime(0.05, currentTime + note.duration);
+                    gainNode.gain.setValueAtTime(0.08, currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, currentTime + note.duration);
 
                     oscillator.start(currentTime);
                     oscillator.stop(currentTime + note.duration);
@@ -363,17 +401,113 @@
                     currentTime += note.duration;
                 });
 
-                // Loop the melody
-                const totalDuration = melody.reduce((sum, note) => sum + note.duration, 0);
+                // Play bass line (sawtooth wave)
+                currentTime = startTime;
+                bass.forEach((note) => {
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+
+                    oscillator.frequency.value = note.freq;
+                    oscillator.type = 'sawtooth';
+
+                    gainNode.gain.setValueAtTime(0.12, currentTime);
+                    gainNode.gain.setValueAtTime(0.08, currentTime + note.duration);
+
+                    oscillator.start(currentTime);
+                    oscillator.stop(currentTime + note.duration);
+
+                    currentTime += note.duration;
+                });
+
+                // Play chords (triangle wave for smooth harmony)
+                currentTime = startTime;
+                chords.forEach((chord) => {
+                    chord.freqs.forEach((freq) => {
+                        const oscillator = audioContext.createOscillator();
+                        const gainNode = audioContext.createGain();
+
+                        oscillator.connect(gainNode);
+                        gainNode.connect(audioContext.destination);
+
+                        oscillator.frequency.value = freq;
+                        oscillator.type = 'triangle';
+
+                        gainNode.gain.setValueAtTime(0.04, currentTime);
+                        gainNode.gain.setValueAtTime(0.02, currentTime + chord.duration);
+
+                        oscillator.start(currentTime);
+                        oscillator.stop(currentTime + chord.duration);
+                    });
+
+                    currentTime += chord.duration;
+                });
+
+                // Play percussion
+                percussionPattern.forEach((hit) => {
+                    const time = startTime + hit.time;
+
+                    if (hit.type === 'kick') {
+                        // Kick drum (low frequency sweep)
+                        const oscillator = audioContext.createOscillator();
+                        const gainNode = audioContext.createGain();
+
+                        oscillator.connect(gainNode);
+                        gainNode.connect(audioContext.destination);
+
+                        oscillator.frequency.setValueAtTime(150, time);
+                        oscillator.frequency.exponentialRampToValueAtTime(30, time + 0.1);
+                        oscillator.type = 'sine';
+
+                        gainNode.gain.setValueAtTime(0.3, time);
+                        gainNode.gain.exponentialRampToValueAtTime(0.01, time + 0.1);
+
+                        oscillator.start(time);
+                        oscillator.stop(time + 0.1);
+                    } else if (hit.type === 'hihat') {
+                        // Hi-hat (white noise)
+                        const bufferSize = audioContext.sampleRate * 0.05;
+                        const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+                        const data = buffer.getChannelData(0);
+
+                        for (let i = 0; i < bufferSize; i++) {
+                            data[i] = Math.random() * 2 - 1;
+                        }
+
+                        const noise = audioContext.createBufferSource();
+                        const gainNode = audioContext.createGain();
+                        const filter = audioContext.createBiquadFilter();
+
+                        noise.buffer = buffer;
+                        noise.connect(filter);
+                        filter.connect(gainNode);
+                        gainNode.connect(audioContext.destination);
+
+                        filter.type = 'highpass';
+                        filter.frequency.value = 8000;
+
+                        gainNode.gain.setValueAtTime(0.08, time);
+                        gainNode.gain.exponentialRampToValueAtTime(0.01, time + 0.05);
+
+                        noise.start(time);
+                    }
+                });
+
+                // Calculate total duration and loop
+                const melodyDuration = melody.reduce((sum, note) => sum + note.duration, 0);
+                const loopDuration = Math.max(melodyDuration, 3.2); // Match with chords/percussion
+
                 setTimeout(() => {
                     if (gameActive) {
-                        currentTime = audioContext.currentTime;
-                        playMelodyLoop();
+                        startTime = audioContext.currentTime;
+                        playMusicLoop();
                     }
-                }, totalDuration * 1000);
+                }, loopDuration * 1000);
             }
 
-            playMelodyLoop();
+            playMusicLoop();
         }
 
         // Stop background music
