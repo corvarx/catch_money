@@ -751,7 +751,7 @@
                 const lyingY = floorY - 25; // Lying flat on floor
 
                 // Body lying down (horizontal)
-                ctx.fillStyle = '#3498db';
+                ctx.fillStyle = player.color || '#3498db';
                 ctx.fillRect(player.x + 10, lyingY, 60, 20);
 
                 // Head lying down
@@ -820,8 +820,8 @@
                 ctx.translate(-centerX, -centerY);
             }
 
-            // Body (blue shirt) - taller
-            ctx.fillStyle = '#3498db';
+            // Body (colored shirt) - taller
+            ctx.fillStyle = player.color || '#3498db';
             ctx.fillRect(player.x + 15, player.y + 20, 30, 35);
 
             // Head
@@ -1342,44 +1342,57 @@
             for (let i = fallingItems.length - 1; i >= 0; i--) {
                 fallingItems[i].y += fallingItems[i].speed;
 
-                // Check collision with player
-                if (checkCollision(fallingItems[i], player)) {
+                // Check collision with both players
+                const collision1 = player1.alive && checkCollision(fallingItems[i], player1);
+                const collision2 = player2.alive && checkCollision(fallingItems[i], player2);
+
+                if (collision1 || collision2) {
+                    const hitPlayer = collision1 ? player1 : player2;
+                    const hitScore = collision1 ? score1 : score2;
                     // Check if it's a bomb
                     if (fallingItems[i].type === ITEM_TYPES.BOMB) {
-                        // GAME OVER - BOMB HIT!
-                        gameActive = false;
+                        // Player hit by bomb!
+                        hitPlayer.alive = false;
                         playExplosionSound();
 
                         // Create explosion at player position
-                        createExplosion(player.x + player.width/2, player.y + player.height/2);
+                        createExplosion(hitPlayer.x + hitPlayer.width/2, hitPlayer.y + hitPlayer.height/2);
 
                         // Remove the bomb from the screen
                         fallingItems.splice(i, 1);
 
-                        // Drop the bucket!
-                        bucketDropped = true;
-                        bucketX = player.x + player.width/2 + 20; // Bucket falls to the side
-                        bucketY = canvas.height - 30; // On the ground
+                        // Check if both players are dead
+                        if (!player1.alive && !player2.alive) {
+                            // Both dead - game over!
+                            gameActive = false;
+                            clearInterval(timerInterval);
+                            clearInterval(spawnInterval);
+                            stopBackgroundMusic();
 
-                        // Start player falling
-                        playerFalling = true;
-                        playerFallSpeed = 0;
-                        playerRotation = 0;
-                        playerLyingDown = false;
+                            setTimeout(() => {
+                                endGame();
+                            }, 3000);
+                        } else if (!player1.alive) {
+                            // Player 1 dead, Player 2 wins!
+                            gameActive = false;
+                            clearInterval(timerInterval);
+                            clearInterval(spawnInterval);
+                            stopBackgroundMusic();
 
-                        // Stop spawning and timer
-                        clearInterval(timerInterval);
-                        clearInterval(spawnInterval);
-                        stopBackgroundMusic();
+                            setTimeout(() => {
+                                declareWinner(2);
+                            }, 3000);
+                        } else {
+                            // Player 2 dead, Player 1 wins!
+                            gameActive = false;
+                            clearInterval(timerInterval);
+                            clearInterval(spawnInterval);
+                            stopBackgroundMusic();
 
-                        // Wait for animation to finish before showing game over
-                        setTimeout(() => {
-                            document.getElementById('gameOverTitle').textContent = '💥 BOOM! Game Over! 💥';
-                            document.getElementById('final-diamond').textContent = score.diamonds;
-                            document.getElementById('final-hexagon').textContent = score.hexagons;
-                            document.getElementById('final-bill').textContent = score.bills;
-                            document.getElementById('gameOver').style.display = 'block';
-                        }, 3000);
+                            setTimeout(() => {
+                                declareWinner(1);
+                            }, 3000);
+                        }
 
                         return;
                     }
@@ -1434,17 +1447,19 @@
                     // Play catch sound
                     playCatchSound();
 
-                    // Update score
+                    // Update score for the player who caught it
                     if (fallingItems[i].type === ITEM_TYPES.DIAMOND) {
-                        score.diamonds++;
-                        document.getElementById('diamond-count').textContent = score.diamonds;
+                        hitScore.diamonds++;
                     } else if (fallingItems[i].type === ITEM_TYPES.ORANGE_DIAMOND) {
-                        score.hexagons++;
-                        document.getElementById('hexagon-count').textContent = score.hexagons;
+                        hitScore.hexagons++;
                     } else if (fallingItems[i].type === ITEM_TYPES.BILL) {
-                        score.bills++;
-                        document.getElementById('bill-count').textContent = score.bills;
+                        hitScore.bills++;
                     }
+
+                    // Update UI (show combined scores for simplicity)
+                    document.getElementById('diamond-count').textContent = score1.diamonds + score2.diamonds;
+                    document.getElementById('hexagon-count').textContent = score1.hexagons + score2.hexagons;
+                    document.getElementById('bill-count').textContent = score1.bills + score2.bills;
 
                     fallingItems.splice(i, 1);
                 } else if (fallingItems[i].y > canvas.height) {
@@ -1766,7 +1781,19 @@
                 }
             }
 
-            drawPlayer();
+            // Draw both players
+            if (player1.alive) {
+                const oldPlayer = player;
+                player = player1; // Temporarily switch context
+                drawPlayer();
+                player = oldPlayer;
+            }
+            if (player2.alive) {
+                const oldPlayer = player;
+                player = player2; // Temporarily switch context
+                drawPlayer();
+                player = oldPlayer;
+            }
 
             // Draw stick or bucket above player's head if alive and not dropped
             if (!bucketDropped && !playerFalling) {
@@ -1818,7 +1845,37 @@
             }, 500); // Faster spawning - more items!
         }
 
-        // End game
+        // Calculate player's total money
+        function calculateMoney(playerScore) {
+            return (playerScore.diamonds * 200) + (playerScore.hexagons * 300) + (playerScore.bills * 100);
+        }
+
+        // Declare winner
+        function declareWinner(winnerNum) {
+            stopSlideSound();
+
+            // Stop rain
+            if (rainTimer) {
+                clearTimeout(rainTimer);
+                rainTimer = null;
+            }
+            if (nextRainTimer) {
+                clearTimeout(nextRainTimer);
+                nextRainTimer = null;
+            }
+
+            const winnerScore = winnerNum === 1 ? score1 : score2;
+            const winnerMoney = calculateMoney(winnerScore);
+
+            document.getElementById('gameOverTitle').textContent = `🏆 Player ${winnerNum} Wins! 🏆`;
+            document.getElementById('final-diamond').textContent = `P${winnerNum}: ${winnerScore.diamonds} ($${winnerScore.diamonds * 200})`;
+            document.getElementById('final-hexagon').textContent = `P${winnerNum}: ${winnerScore.hexagons} ($${winnerScore.hexagons * 300})`;
+            document.getElementById('final-bill').textContent = `P${winnerNum}: ${winnerScore.bills} ($${winnerScore.bills * 100})`;
+
+            document.getElementById('gameOver').style.display = 'block';
+        }
+
+        // End game (time's up - compare scores)
         function endGame() {
             gameActive = false;
             clearInterval(timerInterval);
@@ -1836,10 +1893,22 @@
                 nextRainTimer = null;
             }
 
-            document.getElementById('gameOverTitle').textContent = "Time's Up!";
-            document.getElementById('final-diamond').textContent = score.diamonds;
-            document.getElementById('final-hexagon').textContent = score.hexagons;
-            document.getElementById('final-bill').textContent = score.bills;
+            // Calculate money for both players
+            const money1 = calculateMoney(score1);
+            const money2 = calculateMoney(score2);
+
+            // Determine winner
+            if (money1 > money2) {
+                document.getElementById('gameOverTitle').textContent = `🏆 Player 1 Wins! 🏆 ($${money1} vs $${money2})`;
+            } else if (money2 > money1) {
+                document.getElementById('gameOverTitle').textContent = `🏆 Player 2 Wins! 🏆 ($${money2} vs $${money1})`;
+            } else {
+                document.getElementById('gameOverTitle').textContent = `🤝 Tie Game! 🤝 (Both $${money1})`;
+            }
+
+            document.getElementById('final-diamond').textContent = `P1: ${score1.diamonds} | P2: ${score2.diamonds}`;
+            document.getElementById('final-hexagon').textContent = `P1: ${score1.hexagons} | P2: ${score2.hexagons}`;
+            document.getElementById('final-bill').textContent = `P1: ${score1.bills} | P2: ${score2.bills}`;
 
             document.getElementById('gameOver').style.display = 'block';
         }
@@ -1866,7 +1935,9 @@
 
             gameActive = true;
             timeLeft = 60;
-            score = { diamonds: 0, hexagons: 0, bills: 0 };
+            score1 = { diamonds: 0, hexagons: 0, bills: 0 };
+            score2 = { diamonds: 0, hexagons: 0, bills: 0 };
+            score = score1;
             fallingItems = [];
 
             // Reset explosion and falling states
@@ -1900,10 +1971,21 @@
                 nextRainTimer = null;
             }
 
-            // Reset player position and velocity
-            player.x = canvas.width / 2 - 30;
-            player.y = canvas.height - 135; // Stand on floor
-            player.velocityX = 0; // Reset velocity for slippery physics
+            // Reset both players
+            player1.x = canvas.width / 3 - 30;
+            player1.y = canvas.height - 135;
+            player1.velocityX = 0;
+            player1.alive = true;
+
+            player2.x = (canvas.width * 2) / 3 - 30;
+            player2.y = canvas.height - 135;
+            player2.velocityX = 0;
+            player2.alive = true;
+
+            // Set player reference to player1
+            player.x = player1.x;
+            player.y = player1.y;
+            player.velocityX = 0;
 
             document.getElementById('diamond-count').textContent = 0;
             document.getElementById('hexagon-count').textContent = 0;
