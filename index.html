@@ -187,11 +187,20 @@
         let gameActive = false;
         let gameStarted = false;
         let timeLeft = 60;
-        let score = {
+        let score1 = {
             diamonds: 0,
             hexagons: 0,
             bills: 0
         };
+
+        let score2 = {
+            diamonds: 0,
+            hexagons: 0,
+            bills: 0
+        };
+
+        // Backwards compatibility
+        let score = score1;
 
         // Explosion animation state
         let explosionActive = false;
@@ -216,19 +225,49 @@
         // Stick state
         let stickActive = false;
         let stickTimer = null;
+        let stickStartTime = 0;
+        const stickDuration = 10000; // 10 seconds in milliseconds
 
-        // Player object
-        const player = {
-            x: canvas.width / 2 - 30,
+        // Rain state
+        let isRaining = false;
+        let raindrops = [];
+        let rainTimer = null;
+        let nextRainTimer = null;
+
+        // Player 1 object (Arrow keys)
+        const player1 = {
+            x: canvas.width / 3 - 30,
             y: canvas.height - 135, // Adjusted to stand on floor (120 height + 15 floor height)
             width: 60,
             height: 120,
-            speed: 5, // Reduced from 7 to 5 for slower movement
+            speed: 7, // Base speed
+            velocityX: 0, // Current horizontal velocity (for slippery movement)
             dx: 0,
             walkFrame: 0,
             walkCounter: 0,
-            direction: 'right' // track which direction player is facing
+            direction: 'right',
+            alive: true,
+            color: '#FFA500' // Orange player
         };
+
+        // Player 2 object (A/D keys)
+        const player2 = {
+            x: (canvas.width * 2) / 3 - 30,
+            y: canvas.height - 135,
+            width: 60,
+            height: 120,
+            speed: 7,
+            velocityX: 0,
+            dx: 0,
+            walkFrame: 0,
+            walkCounter: 0,
+            direction: 'right',
+            alive: true,
+            color: '#00BFFF' // Blue player
+        };
+
+        // Backwards compatibility - point to player1
+        const player = player1;
 
         // Falling items array
         let fallingItems = [];
@@ -246,6 +285,9 @@
         // Audio context for music and sound effects
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
         let backgroundMusic = null;
+        let musicLoopTimeout = null;
+        let slideSound = null;
+        let slideSoundGain = null;
 
         // Play catch sound effect
         function playCatchSound() {
@@ -322,33 +364,62 @@
                 backgroundMusic.stop();
             }
 
-            // Super fast, energetic melody like Super Mario/Contra!
+            // Fast, energetic melody with longer loop
             const melody = [
-                { freq: 659.25, duration: 0.12 }, // E5
-                { freq: 659.25, duration: 0.12 }, // E5
-                { freq: 0, duration: 0.12 },      // rest
-                { freq: 659.25, duration: 0.12 }, // E5
-                { freq: 0, duration: 0.12 },      // rest
+                // First phrase - ascending pattern
                 { freq: 523.25, duration: 0.12 }, // C5
+                { freq: 587.33, duration: 0.12 }, // D5
                 { freq: 659.25, duration: 0.12 }, // E5
                 { freq: 0, duration: 0.12 },      // rest
-                { freq: 783.99, duration: 0.25 }, // G5
-                { freq: 0, duration: 0.25 },      // rest
-                { freq: 392.00, duration: 0.25 }, // G4
-                { freq: 0, duration: 0.25 },      // rest
+                { freq: 587.33, duration: 0.12 }, // D5
                 { freq: 523.25, duration: 0.12 }, // C5
+                { freq: 587.33, duration: 0.12 }, // D5
                 { freq: 0, duration: 0.12 },      // rest
-                { freq: 392.00, duration: 0.12 }, // G4
+
+                // Second phrase - jump up
+                { freq: 783.99, duration: 0.15 }, // G5
+                { freq: 659.25, duration: 0.15 }, // E5
+                { freq: 587.33, duration: 0.15 }, // D5
+                { freq: 523.25, duration: 0.2 },  // C5
                 { freq: 0, duration: 0.12 },      // rest
-                { freq: 329.63, duration: 0.12 }, // E4
-                { freq: 0, duration: 0.12 },      // rest
+
+                // Third phrase - bouncy rhythm
                 { freq: 440.00, duration: 0.12 }, // A4
                 { freq: 493.88, duration: 0.12 }, // B4
-                { freq: 466.16, duration: 0.12 }, // A#4
+                { freq: 523.25, duration: 0.12 }, // C5
+                { freq: 0, duration: 0.12 },      // rest
+                { freq: 493.88, duration: 0.12 }, // B4
                 { freq: 440.00, duration: 0.12 }, // A4
+                { freq: 392.00, duration: 0.12 }, // G4
+                { freq: 0, duration: 0.12 },      // rest
+
+                // Fourth phrase - climax
+                { freq: 659.25, duration: 0.12 }, // E5
+                { freq: 587.33, duration: 0.12 }, // D5
+                { freq: 523.25, duration: 0.12 }, // C5
+                { freq: 587.33, duration: 0.12 }, // D5
+                { freq: 659.25, duration: 0.25 }, // E5
+                { freq: 0, duration: 0.12 },      // rest
+                { freq: 783.99, duration: 0.25 }, // G5
+                { freq: 0, duration: 0.12 },      // rest
+
+                // Fifth phrase - descending resolution
+                { freq: 587.33, duration: 0.12 }, // D5
+                { freq: 523.25, duration: 0.12 }, // C5
+                { freq: 440.00, duration: 0.12 }, // A4
+                { freq: 392.00, duration: 0.2 },  // G4
+                { freq: 0, duration: 0.12 },      // rest
+
+                // Sixth phrase - energetic ending
+                { freq: 523.25, duration: 0.12 }, // C5
+                { freq: 659.25, duration: 0.12 }, // E5
+                { freq: 783.99, duration: 0.12 }, // G5
+                { freq: 659.25, duration: 0.12 }, // E5
+                { freq: 523.25, duration: 0.2 },  // C5
+                { freq: 0, duration: 0.2 },       // rest
             ];
 
-            // Fast bass line (punchy!)
+            // Extended bass line to match longer melody
             const bass = [
                 { freq: 130.81, duration: 0.15 }, // C3
                 { freq: 130.81, duration: 0.15 }, // C3
@@ -358,23 +429,45 @@
                 { freq: 195.99, duration: 0.2 },  // G3
                 { freq: 0, duration: 0.1 },       // rest
                 { freq: 195.99, duration: 0.2 },  // G3
+                { freq: 0, duration: 0.1 },       // rest
+
+                { freq: 220.00, duration: 0.15 }, // A3
+                { freq: 220.00, duration: 0.15 }, // A3
+                { freq: 0, duration: 0.1 },       // rest
+                { freq: 220.00, duration: 0.15 }, // A3
+                { freq: 164.81, duration: 0.2 },  // E3
+                { freq: 0, duration: 0.1 },       // rest
+
                 { freq: 130.81, duration: 0.15 }, // C3
                 { freq: 164.81, duration: 0.15 }, // E3
                 { freq: 195.99, duration: 0.15 }, // G3
+                { freq: 0, duration: 0.1 },       // rest
                 { freq: 220.00, duration: 0.15 }, // A3
+                { freq: 195.99, duration: 0.15 }, // G3
+                { freq: 164.81, duration: 0.15 }, // E3
+                { freq: 0, duration: 0.1 },       // rest
+
+                { freq: 130.81, duration: 0.2 },  // C3
+                { freq: 195.99, duration: 0.2 },  // G3
+                { freq: 130.81, duration: 0.2 },  // C3
+                { freq: 0, duration: 0.2 },       // rest
             ];
 
-            // Fast chord progression
+            // Extended chord progression to match longer melody
             const chords = [
-                { freqs: [261.63, 329.63, 392.00], duration: 0.4 }, // C major
-                { freqs: [261.63, 329.63, 392.00], duration: 0.4 }, // C major
+                { freqs: [261.63, 329.63, 392.00], duration: 0.5 }, // C major
+                { freqs: [261.63, 329.63, 392.00], duration: 0.5 }, // C major
+                { freqs: [196.00, 246.94, 293.66], duration: 0.5 }, // G major
+                { freqs: [196.00, 246.94, 293.66], duration: 0.5 }, // G major
+                { freqs: [220.00, 277.18, 329.63], duration: 0.5 }, // A minor
+                { freqs: [220.00, 277.18, 329.63], duration: 0.5 }, // A minor
+                { freqs: [164.81, 207.65, 246.94], duration: 0.4 }, // E minor
                 { freqs: [196.00, 246.94, 293.66], duration: 0.4 }, // G major
-                { freqs: [196.00, 246.94, 293.66], duration: 0.4 }, // G major
-                { freqs: [220.00, 277.18, 329.63], duration: 0.3 }, // A minor
-                { freqs: [246.94, 311.13, 369.99], duration: 0.3 }, // B dim
+                { freqs: [261.63, 329.63, 392.00], duration: 0.6 }, // C major
+                { freqs: [196.00, 246.94, 293.66], duration: 0.6 }, // G major
             ];
 
-            // Fast percussion pattern (driving beat!)
+            // Extended percussion pattern to match longer melody
             const percussionPattern = [
                 { type: 'kick', time: 0.0 },
                 { type: 'hihat', time: 0.1 },
@@ -396,6 +489,32 @@
                 { type: 'hihat', time: 1.7 },
                 { type: 'hihat', time: 1.8 },
                 { type: 'kick', time: 1.9 },
+                { type: 'hihat', time: 2.0 },
+                { type: 'hihat', time: 2.1 },
+                { type: 'kick', time: 2.2 },
+                { type: 'hihat', time: 2.3 },
+                { type: 'kick', time: 2.4 },
+                { type: 'hihat', time: 2.5 },
+                { type: 'hihat', time: 2.6 },
+                { type: 'kick', time: 2.7 },
+                { type: 'hihat', time: 2.8 },
+                { type: 'hihat', time: 2.9 },
+                { type: 'kick', time: 3.0 },
+                { type: 'hihat', time: 3.1 },
+                { type: 'kick', time: 3.2 },
+                { type: 'hihat', time: 3.3 },
+                { type: 'hihat', time: 3.4 },
+                { type: 'kick', time: 3.5 },
+                { type: 'hihat', time: 3.6 },
+                { type: 'hihat', time: 3.7 },
+                { type: 'kick', time: 3.8 },
+                { type: 'hihat', time: 3.9 },
+                { type: 'hihat', time: 4.0 },
+                { type: 'kick', time: 4.1 },
+                { type: 'hihat', time: 4.2 },
+                { type: 'kick', time: 4.3 },
+                { type: 'hihat', time: 4.4 },
+                { type: 'hihat', time: 4.5 },
             ];
 
             let startTime = audioContext.currentTime;
@@ -417,7 +536,7 @@
                         oscillator.frequency.value = note.freq;
                         oscillator.type = 'square';
 
-                        gainNode.gain.setValueAtTime(0.12, currentTime);
+                        gainNode.gain.setValueAtTime(0.06, currentTime); // Reduced from 0.12
                         gainNode.gain.exponentialRampToValueAtTime(0.01, currentTime + note.duration);
 
                         oscillator.start(currentTime);
@@ -438,8 +557,8 @@
                     oscillator.frequency.value = note.freq;
                     oscillator.type = 'sawtooth';
 
-                    gainNode.gain.setValueAtTime(0.12, currentTime);
-                    gainNode.gain.setValueAtTime(0.08, currentTime + note.duration);
+                    gainNode.gain.setValueAtTime(0.06, currentTime); // Reduced from 0.12
+                    gainNode.gain.setValueAtTime(0.04, currentTime + note.duration); // Reduced from 0.08
 
                     oscillator.start(currentTime);
                     oscillator.stop(currentTime + note.duration);
@@ -460,8 +579,8 @@
                         oscillator.frequency.value = freq;
                         oscillator.type = 'triangle';
 
-                        gainNode.gain.setValueAtTime(0.04, currentTime);
-                        gainNode.gain.setValueAtTime(0.02, currentTime + chord.duration);
+                        gainNode.gain.setValueAtTime(0.02, currentTime); // Reduced from 0.04
+                        gainNode.gain.setValueAtTime(0.01, currentTime + chord.duration); // Reduced from 0.02
 
                         oscillator.start(currentTime);
                         oscillator.stop(currentTime + chord.duration);
@@ -486,7 +605,7 @@
                         oscillator.frequency.exponentialRampToValueAtTime(30, time + 0.1);
                         oscillator.type = 'sine';
 
-                        gainNode.gain.setValueAtTime(0.3, time);
+                        gainNode.gain.setValueAtTime(0.15, time); // Reduced from 0.3
                         gainNode.gain.exponentialRampToValueAtTime(0.01, time + 0.1);
 
                         oscillator.start(time);
@@ -513,7 +632,7 @@
                         filter.type = 'highpass';
                         filter.frequency.value = 8000;
 
-                        gainNode.gain.setValueAtTime(0.08, time);
+                        gainNode.gain.setValueAtTime(0.04, time); // Reduced from 0.08
                         gainNode.gain.exponentialRampToValueAtTime(0.01, time + 0.05);
 
                         noise.start(time);
@@ -524,7 +643,7 @@
                 const melodyDuration = melody.reduce((sum, note) => sum + note.duration, 0);
                 const loopDuration = Math.max(melodyDuration, 3.2); // Match with chords/percussion
 
-                setTimeout(() => {
+                musicLoopTimeout = setTimeout(() => {
                     if (gameActive) {
                         startTime = audioContext.currentTime;
                         playMusicLoop();
@@ -541,24 +660,79 @@
                 backgroundMusic.stop();
                 backgroundMusic = null;
             }
+            if (musicLoopTimeout) {
+                clearTimeout(musicLoopTimeout);
+                musicLoopTimeout = null;
+            }
+        }
+
+        // Play sliding sound effect (continuous while sliding)
+        function playSlideSound() {
+            if (slideSound) return; // Already playing
+
+            // Create a friction/scraping sound using filtered noise
+            const bufferSize = audioContext.sampleRate * 2;
+            const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+            const data = buffer.getChannelData(0);
+
+            // Generate brown noise (lower frequency noise for rumble)
+            let lastOut = 0.0;
+            for (let i = 0; i < bufferSize; i++) {
+                const white = Math.random() * 2 - 1;
+                data[i] = (lastOut + (0.02 * white)) / 1.02;
+                lastOut = data[i];
+                data[i] *= 3.5; // Amplify
+            }
+
+            slideSound = audioContext.createBufferSource();
+            slideSound.buffer = buffer;
+            slideSound.loop = true;
+
+            slideSoundGain = audioContext.createGain();
+            slideSoundGain.gain.value = 0.2; // Volume
+
+            // Lowpass filter for dull scraping sound
+            const filter = audioContext.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 400; // Low frequency for friction sound
+            filter.Q.value = 1;
+
+            slideSound.connect(filter);
+            filter.connect(slideSoundGain);
+            slideSoundGain.connect(audioContext.destination);
+
+            slideSound.start();
+        }
+
+        // Stop sliding sound effect
+        function stopSlideSound() {
+            if (slideSound) {
+                slideSound.stop();
+                slideSound = null;
+                slideSoundGain = null;
+            }
         }
 
         // Key states
         const keys = {
+            // Player 1 (Arrow keys)
             ArrowLeft: false,
-            ArrowRight: false
+            ArrowRight: false,
+            // Player 2 (A/D keys)
+            a: false,
+            d: false
         };
 
         // Event listeners for keyboard
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'a' || e.key === 'd') {
                 keys[e.key] = true;
                 e.preventDefault();
             }
         });
 
         document.addEventListener('keyup', (e) => {
-            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'a' || e.key === 'd') {
                 keys[e.key] = false;
                 e.preventDefault();
             }
@@ -963,12 +1137,17 @@
             const stickY = playerY - 15;
             const stickHeight = 8;
 
-            // Stick body - brown wood color
-            ctx.fillStyle = '#8b4513';
+            // Calculate remaining time percentage for fading effect
+            const elapsed = Date.now() - stickStartTime;
+            const remaining = stickDuration - elapsed;
+            const fadePercent = Math.max(0, remaining / stickDuration); // 1.0 at start, 0.0 at end
+
+            // Stick body - brown wood color with fading opacity
+            ctx.fillStyle = `rgba(139, 69, 19, ${fadePercent})`;
             ctx.fillRect(0, stickY, canvas.width, stickHeight);
 
-            // Add some texture/grain to the stick
-            ctx.strokeStyle = '#654321';
+            // Add some texture/grain to the stick with fading
+            ctx.strokeStyle = `rgba(101, 67, 33, ${fadePercent})`;
             ctx.lineWidth = 1;
             for (let i = 0; i < canvas.width; i += 20) {
                 ctx.beginPath();
@@ -977,8 +1156,8 @@
                 ctx.stroke();
             }
 
-            // Highlight where player is holding it
-            ctx.fillStyle = '#daa520';
+            // Highlight where player is holding it with fading golden color
+            ctx.fillStyle = `rgba(218, 165, 32, ${fadePercent})`;
             ctx.fillRect(playerCenterX - 15, stickY - 3, 30, stickHeight + 6);
         }
 
@@ -1060,20 +1239,28 @@
 
         // Create falling item
         function createFallingItem() {
+            // EXTREME difficulty: Even more bombs! Fewer coins (rare power-up)
             const types = [
                 ITEM_TYPES.DIAMOND,
+                ITEM_TYPES.DIAMOND,
+                ITEM_TYPES.ORANGE_DIAMOND,
                 ITEM_TYPES.ORANGE_DIAMOND,
                 ITEM_TYPES.BILL,
+                ITEM_TYPES.BILL,
                 ITEM_TYPES.BOMB,
+                ITEM_TYPES.BOMB,
+                ITEM_TYPES.BOMB,
+                ITEM_TYPES.BOMB,  // 4 bombs total - much higher chance!
+                ITEM_TYPES.BOMB,  // 5th bomb!
                 ITEM_TYPES.GOLD_BOMB,
-                ITEM_TYPES.COIN
+                ITEM_TYPES.COIN   // Rare - only 1/13 chance (~7.7%)
             ];
             const type = types[Math.floor(Math.random() * types.length)];
 
-            // Coins fall much faster (3x-4x speed)
-            let speed = 1 + Math.random() * 1.5;
+            // EXTREME difficulty: Even faster falling speed!
+            let speed = 2.5 + Math.random() * 2.5; // 2.5-5 speed (was 2-4)
             if (type === ITEM_TYPES.COIN) {
-                speed = 3 + Math.random() * 2; // 3-5 speed for coins (much faster!)
+                speed = 5 + Math.random() * 3; // 5-8 speed for coins (was 4-6.5)
             }
 
             fallingItems.push({
@@ -1085,24 +1272,69 @@
             });
         }
 
-        // Update player position
-        function updatePlayer() {
-            player.dx = 0;
+        // Update player position with slippery physics
+        function updatePlayerMovement(playerObj, leftKey, rightKey) {
+            if (!playerObj.alive) return;
 
-            if (keys.ArrowLeft) {
-                player.dx = -player.speed;
+            // Calculate max speed and physics based on rain
+            const maxSpeed = isRaining ? playerObj.speed * 0.5 : playerObj.speed; // 50% slower in rain
+            const acceleration = isRaining ? 0.25 : 1.0; // Much slower acceleration in rain
+            const friction = isRaining ? 0.985 : 0.6; // EXTREMELY slippery in rain - slides very far!
+
+            // Apply acceleration based on key input
+            if (keys[leftKey]) {
+                playerObj.velocityX -= acceleration;
             }
-            if (keys.ArrowRight) {
-                player.dx = player.speed;
+            if (keys[rightKey]) {
+                playerObj.velocityX += acceleration;
             }
 
-            player.x += player.dx;
+            // Apply friction when no keys pressed, or always in rain
+            if (!keys[leftKey] && !keys[rightKey]) {
+                playerObj.velocityX *= friction;
+            }
+
+            // Clamp velocity to max speed
+            if (playerObj.velocityX > maxSpeed) playerObj.velocityX = maxSpeed;
+            if (playerObj.velocityX < -maxSpeed) playerObj.velocityX = -maxSpeed;
+
+            // Stop completely if velocity is very small
+            if (Math.abs(playerObj.velocityX) < 0.1) {
+                playerObj.velocityX = 0;
+            }
+
+            // Play/stop sliding sound when raining and sliding
+            // Sliding = moving when not pressing keys OR pressing opposite direction
+            const isMoving = Math.abs(playerObj.velocityX) > 1;
+            const notPressing = !keys[leftKey] && !keys[rightKey];
+            const pressingOpposite = (keys[leftKey] && playerObj.velocityX > 1) || (keys[rightKey] && playerObj.velocityX < -1);
+            const isSliding = isRaining && isMoving && (notPressing || pressingOpposite);
+
+            if (isSliding) {
+                playSlideSound();
+            } else {
+                stopSlideSound();
+            }
+
+            // Update position based on velocity
+            playerObj.x += playerObj.velocityX;
+            playerObj.dx = playerObj.velocityX; // Update dx for animation
 
             // Boundary checking
-            if (player.x < 0) player.x = 0;
-            if (player.x + player.width > canvas.width) {
-                player.x = canvas.width - player.width;
+            if (playerObj.x < 0) {
+                playerObj.x = 0;
+                playerObj.velocityX = 0; // Stop sliding at boundary
             }
+            if (playerObj.x + playerObj.width > canvas.width) {
+                playerObj.x = canvas.width - playerObj.width;
+                playerObj.velocityX = 0; // Stop sliding at boundary
+            }
+        }
+
+        // Update both players
+        function updatePlayer() {
+            updatePlayerMovement(player1, 'ArrowLeft', 'ArrowRight');
+            updatePlayerMovement(player2, 'a', 'd');
         }
 
         // Update falling items
@@ -1187,12 +1419,13 @@
 
                         // Activate stick (replaces bucket)
                         stickActive = true;
+                        stickStartTime = Date.now(); // Record when stick was activated
 
                         // Set timer to deactivate stick after 10 seconds
                         stickTimer = setTimeout(() => {
                             stickActive = false;
                             stickTimer = null;
-                        }, 10000);
+                        }, stickDuration);
 
                         fallingItems.splice(i, 1);
                         continue;
@@ -1233,25 +1466,25 @@
             let playerTop = player.y;
             let playerBottom = player.y + player.height;
 
-            // Stick mode: full screen width collision
+            // Stick mode: full screen width collision for catchable items only
             if (stickActive && !bucketDropped) {
-                // Stick only catches specific items
-                if (item.type !== ITEM_TYPES.DIAMOND &&
-                    item.type !== ITEM_TYPES.ORANGE_DIAMOND &&
-                    item.type !== ITEM_TYPES.BILL) {
-                    return false; // Stick doesn't catch this type
+                // Stick only catches diamonds, orange diamonds, and bills
+                if (item.type === ITEM_TYPES.DIAMOND ||
+                    item.type === ITEM_TYPES.ORANGE_DIAMOND ||
+                    item.type === ITEM_TYPES.BILL) {
+                    // Stick spans entire screen width
+                    playerLeft = 0;
+                    playerRight = canvas.width;
+                    playerTop = player.y - 25; // Stick position
+                    playerBottom = player.y - 15;
+
+                    return itemRight > playerLeft &&
+                           itemLeft < playerRight &&
+                           itemBottom > playerTop &&
+                           itemTop < playerBottom;
                 }
-
-                // Stick spans entire screen width
-                playerLeft = 0;
-                playerRight = canvas.width;
-                playerTop = player.y - 25; // Stick position
-                playerBottom = player.y - 15;
-
-                return itemRight > playerLeft &&
-                       itemLeft < playerRight &&
-                       itemBottom > playerTop &&
-                       itemTop < playerBottom;
+                // For bombs, gold bombs, and coins - use normal player collision
+                // This keeps player vulnerable to bombs even with stick!
             }
 
             // Expand collision area when bucket is enlarged
@@ -1322,10 +1555,165 @@
             }
         }
 
+        // Rain system
+        function startRain() {
+            isRaining = true;
+            raindrops = [];
+
+            // Create initial raindrops
+            for (let i = 0; i < 100; i++) {
+                raindrops.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    speed: 3 + Math.random() * 4,
+                    length: 10 + Math.random() * 10
+                });
+            }
+
+            // Stop rain after 10 seconds
+            rainTimer = setTimeout(() => {
+                stopRain();
+            }, 10000);
+        }
+
+        function stopRain() {
+            isRaining = false;
+            raindrops = [];
+            if (rainTimer) {
+                clearTimeout(rainTimer);
+                rainTimer = null;
+            }
+
+            // Schedule next rain in random 10-20 seconds (periodic throughout game)
+            scheduleNextRain();
+        }
+
+        function scheduleNextRain() {
+            if (nextRainTimer) {
+                clearTimeout(nextRainTimer);
+            }
+
+            // Random delay between rains: 10-20 seconds
+            const delay = 10000 + Math.random() * 10000;
+            nextRainTimer = setTimeout(() => {
+                if (gameActive) {
+                    startRain();
+                }
+            }, delay);
+        }
+
+        function updateRain() {
+            if (!isRaining) return;
+
+            // Update existing raindrops
+            for (let i = raindrops.length - 1; i >= 0; i--) {
+                raindrops[i].y += raindrops[i].speed;
+
+                // Reset raindrop to top when it goes off screen
+                if (raindrops[i].y > canvas.height) {
+                    raindrops[i].y = -20;
+                    raindrops[i].x = Math.random() * canvas.width;
+                }
+            }
+        }
+
+        function drawRain() {
+            if (!isRaining || raindrops.length === 0) return;
+
+            ctx.strokeStyle = 'rgba(173, 216, 230, 0.6)'; // Light blue, semi-transparent
+            ctx.lineWidth = 1;
+            ctx.lineCap = 'round';
+
+            raindrops.forEach(drop => {
+                ctx.beginPath();
+                ctx.moveTo(drop.x, drop.y);
+                ctx.lineTo(drop.x, drop.y + drop.length);
+                ctx.stroke();
+            });
+        }
+
+        // Draw happy sun (when not raining)
+        function drawSun() {
+            const sunX = canvas.width - 80;
+            const sunY = 60;
+            const sunRadius = 30;
+
+            // Sun body
+            ctx.fillStyle = '#FFD700'; // Golden yellow
+            ctx.beginPath();
+            ctx.arc(sunX, sunY, sunRadius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Sun rays
+            ctx.strokeStyle = '#FFD700';
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            for (let i = 0; i < 8; i++) {
+                const angle = (i * Math.PI) / 4;
+                const rayStart = sunRadius + 5;
+                const rayEnd = sunRadius + 15;
+                ctx.beginPath();
+                ctx.moveTo(sunX + Math.cos(angle) * rayStart, sunY + Math.sin(angle) * rayStart);
+                ctx.lineTo(sunX + Math.cos(angle) * rayEnd, sunY + Math.sin(angle) * rayEnd);
+                ctx.stroke();
+            }
+
+            // Happy face
+            ctx.fillStyle = '#FF8C00'; // Dark orange
+            // Eyes
+            ctx.beginPath();
+            ctx.arc(sunX - 10, sunY - 8, 3, 0, Math.PI * 2);
+            ctx.arc(sunX + 10, sunY - 8, 3, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Smile
+            ctx.strokeStyle = '#FF8C00';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(sunX, sunY + 5, 12, 0.2 * Math.PI, 0.8 * Math.PI);
+            ctx.stroke();
+        }
+
+        // Draw rain clouds
+        function drawClouds() {
+            // Draw multiple clouds
+            drawCloud(100, 50, 1.2);
+            drawCloud(300, 70, 1.0);
+            drawCloud(500, 40, 1.3);
+        }
+
+        function drawCloud(x, y, scale) {
+            ctx.fillStyle = '#808080'; // Gray clouds for rain
+
+            // Cloud made of overlapping circles
+            ctx.beginPath();
+            ctx.arc(x, y, 20 * scale, 0, Math.PI * 2);
+            ctx.arc(x + 25 * scale, y - 10 * scale, 25 * scale, 0, Math.PI * 2);
+            ctx.arc(x + 50 * scale, y, 20 * scale, 0, Math.PI * 2);
+            ctx.arc(x + 25 * scale, y + 10 * scale, 20 * scale, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Draw dark overlay when raining
+        function drawRainOverlay() {
+            if (!isRaining) return;
+
+            // Semi-transparent dark overlay
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
         // Game loop
         function gameLoop() {
             clear();
             drawFloor(); // Always draw the floor first (background layer)
+
+            // Draw weather elements
+            if (isRaining) {
+                drawClouds();
+            } else {
+                drawSun();
+            }
 
             // Draw bucket on ground if dropped
             if (bucketDropped) {
@@ -1399,6 +1787,13 @@
                 updateFallingItems();
             }
 
+            // Update and draw rain (always update/draw, even if player is falling)
+            updateRain();
+            drawRain();
+
+            // Draw dark overlay when raining (after everything else)
+            drawRainOverlay();
+
             requestAnimationFrame(gameLoop);
         }
 
@@ -1420,7 +1815,7 @@
         function startSpawning() {
             spawnInterval = setInterval(() => {
                 createFallingItem();
-            }, 800);
+            }, 500); // Faster spawning - more items!
         }
 
         // End game
@@ -1429,6 +1824,17 @@
             clearInterval(timerInterval);
             clearInterval(spawnInterval);
             stopBackgroundMusic();
+            stopSlideSound();
+
+            // Stop rain
+            if (rainTimer) {
+                clearTimeout(rainTimer);
+                rainTimer = null;
+            }
+            if (nextRainTimer) {
+                clearTimeout(nextRainTimer);
+                nextRainTimer = null;
+            }
 
             document.getElementById('gameOverTitle').textContent = "Time's Up!";
             document.getElementById('final-diamond').textContent = score.diamonds;
@@ -1456,6 +1862,7 @@
                 clearTimeout(stickTimer);
             }
             stopBackgroundMusic();
+            stopSlideSound();
 
             gameActive = true;
             timeLeft = 60;
@@ -1481,9 +1888,22 @@
             stickActive = false;
             stickTimer = null;
 
-            // Reset player position
+            // Reset rain
+            isRaining = false;
+            raindrops = [];
+            if (rainTimer) {
+                clearTimeout(rainTimer);
+                rainTimer = null;
+            }
+            if (nextRainTimer) {
+                clearTimeout(nextRainTimer);
+                nextRainTimer = null;
+            }
+
+            // Reset player position and velocity
             player.x = canvas.width / 2 - 30;
             player.y = canvas.height - 135; // Stand on floor
+            player.velocityX = 0; // Reset velocity for slippery physics
 
             document.getElementById('diamond-count').textContent = 0;
             document.getElementById('hexagon-count').textContent = 0;
@@ -1503,6 +1923,7 @@
             // DON'T call gameLoop() here - it's already running from window.onload
             startTimer();
             startSpawning();
+            scheduleNextRain(); // Start random rain scheduling
         }
 
         // Start game loop on load - this is the ONLY place gameLoop should be called
