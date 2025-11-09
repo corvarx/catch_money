@@ -215,7 +215,8 @@
         <h2>💰 Catch Money! 💰</h2>
         <p id="instructionText">Catch diamonds 💎, orange diamonds 🔶, and $100 bills 💵<br>
         Avoid the bombs 💣 or it's GAME OVER!<br>
-        Power-ups: ⭐ = Big Bucket, 🪙 = Full-Screen Stick!<br>
+        Power-ups: ⭐ = Big Bucket, 🪙 = Full-Screen Stick, 🥾 = Rain Boots (no slide!)<br>
+        Watch out for RAIN - you'll slide and move slower!<br>
         You have 60 seconds!<br><br>
         Use ← → arrow keys to move</p>
         <button onclick="startGameFromButton()">Start Game</button>
@@ -306,6 +307,9 @@
             stickActive: false,
             stickTimer: null,
             stickStartTime: 0,
+            // Rain boots state
+            rainBoots: false,
+            rainBootsTimer: null,
             // Death animation states
             falling: false,
             rotation: 0,
@@ -334,6 +338,9 @@
             stickActive: false,
             stickTimer: null,
             stickStartTime: 0,
+            // Rain boots state
+            rainBoots: false,
+            rainBootsTimer: null,
             // Death animation states
             falling: false,
             rotation: 0,
@@ -356,7 +363,8 @@
             BILL: 'bill',
             BOMB: 'bomb',
             GOLD_BOMB: 'gold_bomb',
-            COIN: 'coin'
+            COIN: 'coin',
+            RAIN_BOOTS: 'rain_boots'
         };
 
         // Audio context for music and sound effects
@@ -984,10 +992,21 @@
                 ctx.lineTo(player.x + 38, bottomY);
                 ctx.stroke();
 
-                // Feet
-                ctx.fillStyle = '#34495e';
-                ctx.fillRect(player.x + 18, bottomY - 4, 10, 4);
-                ctx.fillRect(player.x + 34, bottomY - 4, 10, 4);
+                // Feet (boots if rain boots active)
+                if (player.rainBoots) {
+                    // Draw rain boots (yellow/brown boots)
+                    ctx.fillStyle = '#8B4513'; // Brown boots
+                    ctx.fillRect(player.x + 16, bottomY - 6, 12, 6);
+                    ctx.fillRect(player.x + 32, bottomY - 6, 12, 6);
+                    // Boot shine
+                    ctx.fillStyle = '#D2691E';
+                    ctx.fillRect(player.x + 17, bottomY - 5, 3, 2);
+                    ctx.fillRect(player.x + 33, bottomY - 5, 3, 2);
+                } else {
+                    ctx.fillStyle = '#34495e';
+                    ctx.fillRect(player.x + 18, bottomY - 4, 10, 4);
+                    ctx.fillRect(player.x + 34, bottomY - 4, 10, 4);
+                }
             } else if (player.falling) {
                 // Falling - legs flailing
                 ctx.beginPath();
@@ -998,9 +1017,15 @@
                 ctx.stroke();
 
                 // Feet
-                ctx.fillStyle = '#34495e';
-                ctx.fillRect(player.x + 6, bottomY - 14, 10, 4);
-                ctx.fillRect(player.x + 46, bottomY - 19, 10, 4);
+                if (player.rainBoots) {
+                    ctx.fillStyle = '#8B4513';
+                    ctx.fillRect(player.x + 4, bottomY - 16, 12, 6);
+                    ctx.fillRect(player.x + 44, bottomY - 21, 12, 6);
+                } else {
+                    ctx.fillStyle = '#34495e';
+                    ctx.fillRect(player.x + 6, bottomY - 14, 10, 4);
+                    ctx.fillRect(player.x + 46, bottomY - 19, 10, 4);
+                }
             } else {
                 // Walking animation - legs alternate
                 ctx.beginPath();
@@ -1013,10 +1038,19 @@
 
                     ctx.stroke();
 
-                    // Feet
-                    ctx.fillStyle = '#34495e';
-                    ctx.fillRect(player.x + 12, bottomY - 4, 10, 4);
-                    ctx.fillRect(player.x + 40, bottomY - 4, 10, 4);
+                    // Feet (boots if rain boots active)
+                    if (player.rainBoots) {
+                        ctx.fillStyle = '#8B4513';
+                        ctx.fillRect(player.x + 10, bottomY - 6, 12, 6);
+                        ctx.fillRect(player.x + 38, bottomY - 6, 12, 6);
+                        ctx.fillStyle = '#D2691E';
+                        ctx.fillRect(player.x + 11, bottomY - 5, 3, 2);
+                        ctx.fillRect(player.x + 39, bottomY - 5, 3, 2);
+                    } else {
+                        ctx.fillStyle = '#34495e';
+                        ctx.fillRect(player.x + 12, bottomY - 4, 10, 4);
+                        ctx.fillRect(player.x + 40, bottomY - 4, 10, 4);
+                    }
                 } else {
                     // Right leg forward, left leg back
                     ctx.moveTo(player.x + 22, player.y + 65);
@@ -1026,10 +1060,19 @@
 
                     ctx.stroke();
 
-                    // Feet
-                    ctx.fillStyle = '#34495e';
-                    ctx.fillRect(player.x + 24, bottomY - 4, 10, 4);
-                    ctx.fillRect(player.x + 28, bottomY - 4, 10, 4);
+                    // Feet (boots if rain boots active)
+                    if (player.rainBoots) {
+                        ctx.fillStyle = '#8B4513';
+                        ctx.fillRect(player.x + 22, bottomY - 6, 12, 6);
+                        ctx.fillRect(player.x + 26, bottomY - 6, 12, 6);
+                        ctx.fillStyle = '#D2691E';
+                        ctx.fillRect(player.x + 23, bottomY - 5, 3, 2);
+                        ctx.fillRect(player.x + 27, bottomY - 5, 3, 2);
+                    } else {
+                        ctx.fillStyle = '#34495e';
+                        ctx.fillRect(player.x + 24, bottomY - 4, 10, 4);
+                        ctx.fillRect(player.x + 28, bottomY - 4, 10, 4);
+                    }
                 }
             }
 
@@ -1135,6 +1178,14 @@
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText('🪙', x, y);
+        }
+
+        // Draw rain boots
+        function drawRainBoots(x, y, size) {
+            ctx.font = `${size * 2}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('🥾', x, y);
         }
 
         // Draw bucket
@@ -1347,14 +1398,28 @@
                 ITEM_TYPES.BOMB,  // 4 bombs total - much higher chance!
                 ITEM_TYPES.BOMB,  // 5th bomb!
                 ITEM_TYPES.GOLD_BOMB,
-                ITEM_TYPES.COIN   // Rare - only 1/13 chance (~7.7%)
+                ITEM_TYPES.COIN,   // Rare - only 1/15 chance (~6.7%)
+                ITEM_TYPES.RAIN_BOOTS  // Rain boots - only in rain, or 1/15 chance (~6.7%)
             ];
-            const type = types[Math.floor(Math.random() * types.length)];
+
+            let type;
+            // Rain boots only drop when it's raining (or 30% chance when not raining for testing)
+            if (isRaining) {
+                // Higher chance of rain boots when raining
+                const rainTypes = types.concat([
+                    ITEM_TYPES.RAIN_BOOTS,
+                    ITEM_TYPES.RAIN_BOOTS,
+                    ITEM_TYPES.RAIN_BOOTS  // Triple the chance in rain
+                ]);
+                type = rainTypes[Math.floor(Math.random() * rainTypes.length)];
+            } else {
+                type = types[Math.floor(Math.random() * types.length)];
+            }
 
             // EXTREME difficulty: Even faster falling speed!
             let speed = 2.5 + Math.random() * 2.5; // 2.5-5 speed (was 2-4)
-            if (type === ITEM_TYPES.COIN) {
-                speed = 5 + Math.random() * 3; // 5-8 speed for coins (was 4-6.5)
+            if (type === ITEM_TYPES.COIN || type === ITEM_TYPES.RAIN_BOOTS) {
+                speed = 5 + Math.random() * 3; // 5-8 speed for coins and boots (was 4-6.5)
             }
 
             fallingItems.push({
@@ -1370,10 +1435,14 @@
         function updatePlayerMovement(playerObj, leftKey, rightKey) {
             if (!playerObj.alive) return;
 
-            // Calculate max speed and physics based on rain
-            const maxSpeed = isRaining ? playerObj.speed * 0.5 : playerObj.speed; // 50% slower in rain
-            const acceleration = isRaining ? 0.25 : 1.0; // Much slower acceleration in rain
-            const friction = isRaining ? 0.985 : 0.6; // EXTREMELY slippery in rain - slides very far!
+            // Rain boots override rain physics!
+            const hasBoots = playerObj.rainBoots;
+            const affectedByRain = isRaining && !hasBoots;
+
+            // Calculate max speed and physics based on rain (and boots!)
+            const maxSpeed = affectedByRain ? playerObj.speed * 0.5 : playerObj.speed; // 50% slower in rain (unless boots)
+            const acceleration = affectedByRain ? 0.25 : 1.0; // Much slower acceleration in rain (unless boots)
+            const friction = affectedByRain ? 0.985 : 0.6; // EXTREMELY slippery in rain (unless boots) - slides very far!
 
             // Apply acceleration based on key input
             if (keys[leftKey]) {
@@ -1397,12 +1466,12 @@
                 playerObj.velocityX = 0;
             }
 
-            // Play/stop sliding sound when raining and sliding
+            // Play/stop sliding sound when raining and sliding (but not if wearing boots!)
             // Sliding = moving when not pressing keys OR pressing opposite direction
             const isMoving = Math.abs(playerObj.velocityX) > 1;
             const notPressing = !keys[leftKey] && !keys[rightKey];
             const pressingOpposite = (keys[leftKey] && playerObj.velocityX > 1) || (keys[rightKey] && playerObj.velocityX < -1);
-            const isSliding = isRaining && isMoving && (notPressing || pressingOpposite);
+            const isSliding = affectedByRain && isMoving && (notPressing || pressingOpposite);
 
             if (isSliding) {
                 playSlideSound();
@@ -1569,6 +1638,29 @@
                         continue;
                     }
 
+                    // Check if it's rain boots (anti-slide power-up!)
+                    if (fallingItems[i].type === ITEM_TYPES.RAIN_BOOTS) {
+                        // Power up! Activate rain boots for THIS player only
+                        playCatchSound();
+
+                        // Clear existing timer if any
+                        if (hitPlayer.rainBootsTimer) {
+                            clearTimeout(hitPlayer.rainBootsTimer);
+                        }
+
+                        // Activate rain boots for this player
+                        hitPlayer.rainBoots = true;
+
+                        // Set timer to deactivate rain boots after 10 seconds
+                        hitPlayer.rainBootsTimer = setTimeout(() => {
+                            hitPlayer.rainBoots = false;
+                            hitPlayer.rainBootsTimer = null;
+                        }, 10000);
+
+                        fallingItems.splice(i, 1);
+                        continue;
+                    }
+
                     // Play catch sound
                     playCatchSound();
 
@@ -1660,6 +1752,8 @@
                     drawGoldBomb(item.x, item.y, item.size);
                 } else if (item.type === ITEM_TYPES.COIN) {
                     drawCoin(item.x, item.y, item.size);
+                } else if (item.type === ITEM_TYPES.RAIN_BOOTS) {
+                    drawRainBoots(item.x, item.y, item.size);
                 }
             });
         }
@@ -1695,7 +1789,7 @@
             }
         }
 
-        // Rain system
+        // Rain system - rains 75% of the time!
         function startRain() {
             isRaining = true;
             raindrops = [];
@@ -1710,10 +1804,10 @@
                 });
             }
 
-            // Stop rain after 10 seconds
+            // Stop rain after 15 seconds (75% of 20 second cycle)
             rainTimer = setTimeout(() => {
                 stopRain();
-            }, 10000);
+            }, 15000);
         }
 
         function stopRain() {
@@ -1724,7 +1818,7 @@
                 rainTimer = null;
             }
 
-            // Schedule next rain in random 10-20 seconds (periodic throughout game)
+            // Schedule next rain in 5 seconds (25% of 20 second cycle, for 75% rain time)
             scheduleNextRain();
         }
 
@@ -1733,8 +1827,8 @@
                 clearTimeout(nextRainTimer);
             }
 
-            // Random delay between rains: 10-20 seconds
-            const delay = 10000 + Math.random() * 10000;
+            // Short delay between rains: 5 seconds (to make rain happen 75% of time)
+            const delay = 5000;
             nextRainTimer = setTimeout(() => {
                 if (gameActive) {
                     startRain();
@@ -2156,14 +2250,16 @@
             if (mode === 1) {
                 instructionText.innerHTML = `Catch diamonds 💎, orange diamonds 🔶, and $100 bills 💵<br>
                 Avoid the bombs 💣 or it's GAME OVER!<br>
-                Power-ups: ⭐ = Big Bucket, 🪙 = Full-Screen Stick!<br>
+                Power-ups: ⭐ = Big Bucket, 🪙 = Full-Screen Stick, 🥾 = Rain Boots (no slide!)<br>
+                Watch out for RAIN - you'll slide and move slower!<br>
                 You have 60 seconds!<br><br>
                 Use ← → arrow keys to move`;
             } else {
                 instructionText.innerHTML = `👥 2 PLAYER MODE 👥<br>
                 Catch diamonds 💎 ($200), orange diamonds 🔶 ($300), and $100 bills 💵<br>
                 Avoid the bombs 💣 or you die!<br>
-                Power-ups: ⭐ = Big Bucket, 🪙 = Full-Screen Stick (shared!)<br>
+                Power-ups: ⭐ = Big Bucket, 🪙 = Full-Screen Stick, 🥾 = Rain Boots!<br>
+                Watch out for RAIN - you'll slide and move slower (unless you have boots!)<br>
                 You have 60 seconds!<br><br>
                 Player 1 (Orange): ← → arrow keys | Player 2 (Blue): A D keys`;
             }
@@ -2231,6 +2327,11 @@
                 clearTimeout(player1.stickTimer);
                 player1.stickTimer = null;
             }
+            player1.rainBoots = false;
+            if (player1.rainBootsTimer) {
+                clearTimeout(player1.rainBootsTimer);
+                player1.rainBootsTimer = null;
+            }
 
             player2.x = (canvas.width * 2) / 3 - 30;
             player2.y = canvas.height - 135;
@@ -2249,6 +2350,11 @@
             if (player2.stickTimer) {
                 clearTimeout(player2.stickTimer);
                 player2.stickTimer = null;
+            }
+            player2.rainBoots = false;
+            if (player2.rainBootsTimer) {
+                clearTimeout(player2.rainBootsTimer);
+                player2.rainBootsTimer = null;
             }
 
             // Set player reference to player1
@@ -2275,7 +2381,7 @@
             // DON'T call gameLoop() here - it's already running from window.onload
             startTimer();
             startSpawning();
-            scheduleNextRain(); // Start random rain scheduling
+            startRain(); // Start with rain immediately (75% rain time)
         }
 
         // Start game loop on load - this is the ONLY place gameLoop should be called
