@@ -142,6 +142,46 @@
             transform: scale(1.05);
         }
 
+        .duration-selection {
+            margin-top: 30px;
+            margin-bottom: 20px;
+        }
+
+        .duration-selection h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+
+        .duration-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .duration-button {
+            background: #95a5a6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+        }
+
+        .duration-button:hover {
+            background: #7f8c8d;
+            transform: scale(1.05);
+        }
+
+        .duration-button.selected {
+            background: #27ae60;
+            border: 3px solid #229954;
+        }
+
         .start-screen {
             display: none;
             position: absolute;
@@ -204,10 +244,20 @@
 
     <div class="player-select-screen" id="playerSelectScreen">
         <h2>💰 Catch Money! 💰</h2>
-        <p style="margin-bottom: 30px; font-size: 18px; color: #7f8c8d;">Choose Game Mode:</p>
+        <p style="margin-bottom: 20px; font-size: 18px; color: #7f8c8d;">Choose Game Mode:</p>
         <div class="mode-buttons">
             <button class="mode-button" onclick="selectMode(1)">1 Player</button>
             <button class="mode-button" onclick="selectMode(2)">2 Players</button>
+        </div>
+
+        <div class="duration-selection">
+            <h3>Game Duration:</h3>
+            <div class="duration-buttons">
+                <button class="duration-button" onclick="selectDuration(30)">30s</button>
+                <button class="duration-button selected" onclick="selectDuration(60)">1 min</button>
+                <button class="duration-button" onclick="selectDuration(90)">1:30</button>
+                <button class="duration-button" onclick="selectDuration(120)">2 min</button>
+            </div>
         </div>
     </div>
 
@@ -217,7 +267,7 @@
         Avoid the bombs 💣 or it's GAME OVER!<br>
         Power-ups: ⭐ = Big Bucket, 🪙 = Full-Screen Stick, 🥾 = Rain Boots (no slide!)<br>
         Watch out for RAIN - you'll slide and move slower!<br>
-        You have 60 seconds!<br><br>
+        You have 1 minute!<br><br>
         Use ← → arrow keys to move</p>
         <button onclick="startGameFromButton()">Start Game</button>
     </div>
@@ -239,6 +289,7 @@
         // Game state
         let gameActive = false;
         let gameStarted = false;
+        let gameDuration = 60; // Default 1 minute
         let timeLeft = 60;
         let gameMode = 1; // 1 = single player, 2 = two player
         let score1 = {
@@ -2239,11 +2290,35 @@
             document.getElementById('gameOver').style.display = 'block';
         }
 
+        // Select duration
+        function selectDuration(seconds) {
+            gameDuration = seconds;
+
+            // Update button styles
+            const buttons = document.querySelectorAll('.duration-button');
+            buttons.forEach(button => {
+                button.classList.remove('selected');
+            });
+            event.target.classList.add('selected');
+        }
+
         // Select game mode
         function selectMode(mode) {
             gameMode = mode;
             document.getElementById('playerSelectScreen').style.display = 'none';
             document.getElementById('startScreen').style.display = 'block';
+
+            // Format duration for display
+            let durationText;
+            if (gameDuration < 60) {
+                durationText = `${gameDuration} seconds`;
+            } else if (gameDuration === 60) {
+                durationText = '60 seconds';
+            } else {
+                const minutes = Math.floor(gameDuration / 60);
+                const seconds = gameDuration % 60;
+                durationText = seconds > 0 ? `${minutes}:${seconds.toString().padStart(2, '0')}` : `${minutes} minute${minutes > 1 ? 's' : ''}`;
+            }
 
             // Update instructions based on mode
             const instructionText = document.getElementById('instructionText');
@@ -2252,7 +2327,7 @@
                 Avoid the bombs 💣 or it's GAME OVER!<br>
                 Power-ups: ⭐ = Big Bucket, 🪙 = Full-Screen Stick, 🥾 = Rain Boots (no slide!)<br>
                 Watch out for RAIN - you'll slide and move slower!<br>
-                You have 60 seconds!<br><br>
+                You have ${durationText}!<br><br>
                 Use ← → arrow keys to move`;
             } else {
                 instructionText.innerHTML = `👥 2 PLAYER MODE 👥<br>
@@ -2260,7 +2335,7 @@
                 Avoid the bombs 💣 or you die!<br>
                 Power-ups: ⭐ = Big Bucket, 🪙 = Full-Screen Stick, 🥾 = Rain Boots!<br>
                 Watch out for RAIN - you'll slide and move slower (unless you have boots!)<br>
-                You have 60 seconds!<br><br>
+                You have ${durationText}!<br><br>
                 Player 1 (Orange): ← → arrow keys | Player 2 (Blue): A D keys`;
             }
         }
@@ -2286,7 +2361,7 @@
             stopSlideSound();
 
             gameActive = true;
-            timeLeft = 60;
+            timeLeft = gameDuration; // Use selected duration
             score1 = { diamonds: 0, hexagons: 0, bills: 0 };
             score2 = { diamonds: 0, hexagons: 0, bills: 0 };
             score = score1;
@@ -2365,7 +2440,7 @@
             document.getElementById('diamond-count').textContent = 0;
             document.getElementById('hexagon-count').textContent = 0;
             document.getElementById('bill-count').textContent = 0;
-            document.getElementById('time').textContent = 60;
+            document.getElementById('time').textContent = gameDuration;
 
             document.getElementById('gameOver').style.display = 'none';
 
@@ -2377,6 +2452,8 @@
         function startGame() {
             gameActive = true;
             gameStarted = true;
+            timeLeft = gameDuration; // Initialize with selected duration
+            document.getElementById('time').textContent = timeLeft; // Update display
             playBackgroundMusic();
             // DON'T call gameLoop() here - it's already running from window.onload
             startTimer();
