@@ -305,7 +305,14 @@
             bucketSizeTimer: null,
             stickActive: false,
             stickTimer: null,
-            stickStartTime: 0
+            stickStartTime: 0,
+            // Death animation states
+            falling: false,
+            rotation: 0,
+            fallSpeed: 0,
+            lyingDown: false,
+            bucketX: 0,
+            bucketY: 0
         };
 
         // Player 2 object (A/D keys)
@@ -326,7 +333,14 @@
             bucketSizeTimer: null,
             stickActive: false,
             stickTimer: null,
-            stickStartTime: 0
+            stickStartTime: 0,
+            // Death animation states
+            falling: false,
+            rotation: 0,
+            fallSpeed: 0,
+            lyingDown: false,
+            bucketX: 0,
+            bucketY: 0
         };
 
         // Backwards compatibility - point to player1
@@ -801,14 +815,14 @@
             }
         });
 
-        // Draw player
+        // Draw player (uses player object's own falling/lying states)
         function drawPlayer() {
             const centerX = player.x + player.width/2;
             const centerY = player.y + player.height/2;
             const bottomY = player.y + player.height;
 
             // Special drawing for lying down dead state
-            if (playerLyingDown) {
+            if (player.lyingDown) {
                 // Draw player lying flat on the ground
                 const floorY = canvas.height - 15;
                 const lyingY = floorY - 25; // Lying flat on floor
@@ -876,10 +890,10 @@
             }
 
             // If player is falling but not yet lying down, apply rotation
-            if (playerFalling && !playerLyingDown) {
+            if (player.falling && !player.lyingDown) {
                 ctx.save();
                 ctx.translate(centerX, centerY);
-                ctx.rotate(playerRotation);
+                ctx.rotate(player.rotation);
                 ctx.translate(-centerX, -centerY);
             }
 
@@ -895,7 +909,7 @@
 
             // Eyes (X_X if falling, normal if not)
             ctx.fillStyle = '#000';
-            if (playerFalling) {
+            if (player.falling) {
                 // Draw X eyes
                 ctx.lineWidth = 2;
                 ctx.beginPath();
@@ -922,7 +936,7 @@
             }
 
             // Smile (or no mouth if falling)
-            if (!playerFalling) {
+            if (!player.falling) {
                 ctx.strokeStyle = '#000';
                 ctx.lineWidth = 1;
                 ctx.beginPath();
@@ -934,7 +948,7 @@
             ctx.strokeStyle = '#f39c12';
             ctx.lineWidth = 3;
             ctx.beginPath();
-            if (!playerFalling) {
+            if (!player.falling) {
                 // Left arm - longer, reaching up to bucket
                 ctx.moveTo(player.x + 15, player.y + 25);
                 ctx.lineTo(player.x + 10, player.y + 5);
@@ -961,7 +975,7 @@
             ctx.lineWidth = 5;
             ctx.lineCap = 'round';
 
-            if (player.dx === 0 && !playerFalling) {
+            if (player.dx === 0 && !player.falling) {
                 // Standing still - legs together
                 ctx.beginPath();
                 ctx.moveTo(player.x + 22, player.y + 65);
@@ -974,7 +988,7 @@
                 ctx.fillStyle = '#34495e';
                 ctx.fillRect(player.x + 18, bottomY - 4, 10, 4);
                 ctx.fillRect(player.x + 34, bottomY - 4, 10, 4);
-            } else if (playerFalling) {
+            } else if (player.falling) {
                 // Falling - legs flailing
                 ctx.beginPath();
                 ctx.moveTo(player.x + 22, player.y + 65);
@@ -1019,12 +1033,12 @@
                 }
             }
 
-            if (playerFalling && !playerLyingDown) {
+            if (player.falling && !player.lyingDown) {
                 ctx.restore();
             }
 
             // Update walk animation
-            if (player.dx !== 0 && !playerFalling) {
+            if (player.dx !== 0 && !player.falling) {
                 player.walkCounter++;
                 if (player.walkCounter > 8) { // Change frame every 8 game loops
                     player.walkFrame = (player.walkFrame + 1) % 2;
@@ -1440,6 +1454,17 @@
                         // Create explosion at player position
                         createExplosion(hitPlayer.x + hitPlayer.width/2, hitPlayer.y + hitPlayer.height/2);
 
+                        // Start death animation for this player
+                        hitPlayer.falling = true;
+                        hitPlayer.rotation = 0;
+                        hitPlayer.fallSpeed = 0;
+                        hitPlayer.lyingDown = false;
+
+                        // Drop the bucket
+                        const floorY = canvas.height - 15;
+                        hitPlayer.bucketX = hitPlayer.x + hitPlayer.width/2 - 10;
+                        hitPlayer.bucketY = floorY - 25; // On the ground near player
+
                         // Remove the bomb from the screen
                         fallingItems.splice(i, 1);
 
@@ -1582,7 +1607,7 @@
             let playerBottom = player.y + player.height;
 
             // Stick mode: full screen width collision for catchable items only
-            if (player.stickActive && !bucketDropped) {
+            if (player.stickActive && player.alive) {
                 // Stick only catches diamonds, orange diamonds, and bills
                 if (item.type === ITEM_TYPES.DIAMOND ||
                     item.type === ITEM_TYPES.ORANGE_DIAMOND ||
@@ -1603,7 +1628,7 @@
             }
 
             // Expand collision area when bucket is enlarged
-            if (player.bucketSize > 1 && !bucketDropped && !player.stickActive) {
+            if (player.bucketSize > 1 && player.alive && !player.stickActive) {
                 // Bucket is held above head, so expand the top collision area
                 const bucketWidth = 15 * player.bucketSize;
                 const bucketHeight = 15 * player.bucketSize;
@@ -1830,12 +1855,15 @@
                 drawSun();
             }
 
-            // Draw bucket on ground if dropped
-            if (bucketDropped) {
-                drawBucket(bucketX, bucketY, true, bucketSize);
+            // Draw buckets on ground for dead players
+            if (player1.lyingDown) {
+                drawBucket(player1.bucketX, player1.bucketY, true, player1.bucketSize);
+            }
+            if (player2.lyingDown) {
+                drawBucket(player2.bucketX, player2.bucketY, true, player2.bucketSize);
             }
 
-            if (!gameActive && !explosionActive && !playerFalling) {
+            if (!gameActive && !explosionActive && !player1.falling && !player2.falling) {
                 // Always show players standing (even on start screen)
                 // Draw player 1
                 if (player1.alive) {
@@ -1852,18 +1880,16 @@
                     player = oldPlayer;
                 }
 
-                // Draw buckets above players
-                if (!bucketDropped) {
-                    if (player1.alive) {
-                        const bucketX1 = player1.x + player1.width/2;
-                        const bucketY1 = player1.y - 10 - (player1.bucketSize > 1 ? 40 : 0);
-                        drawBucket(bucketX1, bucketY1, false, player1.bucketSize);
-                    }
-                    if (gameMode === 2 && player2.alive) {
-                        const bucketX2 = player2.x + player2.width/2;
-                        const bucketY2 = player2.y - 10 - (player2.bucketSize > 1 ? 40 : 0);
-                        drawBucket(bucketX2, bucketY2, false, player2.bucketSize);
-                    }
+                // Draw buckets above players (if alive and not falling)
+                if (player1.alive && !player1.falling) {
+                    const bucketX1 = player1.x + player1.width/2;
+                    const bucketY1 = player1.y - 10 - (player1.bucketSize > 1 ? 40 : 0);
+                    drawBucket(bucketX1, bucketY1, false, player1.bucketSize);
+                }
+                if (gameMode === 2 && player2.alive && !player2.falling) {
+                    const bucketX2 = player2.x + player2.width/2;
+                    const bucketY2 = player2.y - 10 - (player2.bucketSize > 1 ? 40 : 0);
+                    drawBucket(bucketX2, bucketY2, false, player2.bucketSize);
                 }
 
                 requestAnimationFrame(gameLoop);
@@ -1872,46 +1898,66 @@
 
             drawFallingItems();
 
-            // Update and draw player falling animation
-            if (playerFalling) {
-                playerFallSpeed += 0.5; // gravity
-                player.y += playerFallSpeed;
+            // Update player 1 falling animation
+            if (player1.falling) {
+                player1.fallSpeed += 0.5; // gravity
+                player1.y += player1.fallSpeed;
 
                 // Spin for about 2.5 rotations (5 * PI), then lie down at 90 degrees
-                if (!playerLyingDown) {
-                    if (playerRotation < Math.PI * 5) {
-                        playerRotation += 0.15; // spin while falling
+                if (!player1.lyingDown) {
+                    if (player1.rotation < Math.PI * 5) {
+                        player1.rotation += 0.15; // spin while falling
                     } else {
                         // Stop spinning and lie down
-                        playerRotation = Math.PI / 2; // 90 degrees (lying on side)
-                        playerLyingDown = true;
+                        player1.rotation = Math.PI / 2; // 90 degrees (lying on side)
+                        player1.lyingDown = true;
                     }
                 }
 
                 // Stop falling when hits ground (adjusted for floor height)
                 const floorY = canvas.height - 15; // Account for floor visual height
-                if (player.y + player.height >= floorY) {
-                    player.y = floorY - player.height;
-                    playerFallSpeed = 0;
+                if (player1.y + player1.height >= floorY) {
+                    player1.y = floorY - player1.height;
+                    player1.fallSpeed = 0;
                 }
             }
 
-            // Draw players based on game mode
-            if (player1.alive) {
-                const oldPlayer = player;
-                player = player1; // Temporarily switch context
-                drawPlayer();
-                player = oldPlayer;
-            }
-            if (gameMode === 2 && player2.alive) {
-                const oldPlayer = player;
-                player = player2; // Temporarily switch context
-                drawPlayer();
-                player = oldPlayer;
+            // Update player 2 falling animation
+            if (player2.falling) {
+                player2.fallSpeed += 0.5; // gravity
+                player2.y += player2.fallSpeed;
+
+                // Spin for about 2.5 rotations (5 * PI), then lie down at 90 degrees
+                if (!player2.lyingDown) {
+                    if (player2.rotation < Math.PI * 5) {
+                        player2.rotation += 0.15; // spin while falling
+                    } else {
+                        // Stop spinning and lie down
+                        player2.rotation = Math.PI / 2; // 90 degrees (lying on side)
+                        player2.lyingDown = true;
+                    }
+                }
+
+                // Stop falling when hits ground (adjusted for floor height)
+                const floorY = canvas.height - 15; // Account for floor visual height
+                if (player2.y + player2.height >= floorY) {
+                    player2.y = floorY - player2.height;
+                    player2.fallSpeed = 0;
+                }
             }
 
-            // Draw stick or bucket above players' heads if alive and not dropped
-            if (!bucketDropped && !playerFalling) {
+            // Draw players based on game mode (draw even if dead to show lying down)
+            const oldPlayer = player;
+            player = player1; // Temporarily switch context
+            drawPlayer();
+            if (gameMode === 2) {
+                player = player2; // Temporarily switch context
+                drawPlayer();
+            }
+            player = oldPlayer;
+
+            // Draw stick or bucket above players' heads if alive and not falling
+            if (!player1.falling && !player2.falling) {
                 // Check if any players have sticks
                 const p1HasStick = player1.alive && player1.stickActive;
                 const p2HasStick = gameMode === 2 && player2.alive && player2.stickActive;
@@ -1986,7 +2032,8 @@
 
             drawExplosion();
 
-            if (!playerFalling) {
+            // Only update player movement and item collisions when not falling
+            if (!player1.falling && !player2.falling) {
                 updatePlayer();
                 updateFallingItems();
             }
@@ -2149,18 +2196,9 @@
             score = score1;
             fallingItems = [];
 
-            // Reset explosion and falling states
+            // Reset explosion states
             explosionActive = false;
             explosionParticles = [];
-            playerFalling = false;
-            playerRotation = 0;
-            playerFallSpeed = 0;
-            playerLyingDown = false;
-
-            // Reset bucket
-            bucketDropped = false;
-            bucketX = 0;
-            bucketY = 0;
 
             // Reset rain
             isRaining = false;
@@ -2180,6 +2218,10 @@
             player1.velocityX = 0;
             player1.alive = true;
             player1.bucketSize = 1;
+            player1.falling = false;
+            player1.rotation = 0;
+            player1.fallSpeed = 0;
+            player1.lyingDown = false;
             if (player1.bucketSizeTimer) {
                 clearTimeout(player1.bucketSizeTimer);
                 player1.bucketSizeTimer = null;
@@ -2195,6 +2237,10 @@
             player2.velocityX = 0;
             player2.alive = true;
             player2.bucketSize = 1;
+            player2.falling = false;
+            player2.rotation = 0;
+            player2.fallSpeed = 0;
+            player2.lyingDown = false;
             if (player2.bucketSizeTimer) {
                 clearTimeout(player2.bucketSizeTimer);
                 player2.bucketSizeTimer = null;
