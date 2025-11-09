@@ -100,7 +100,50 @@
             background: #2980b9;
         }
 
+        .player-select-screen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 50px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            text-align: center;
+            z-index: 15;
+        }
+
+        .player-select-screen h2 {
+            color: #2c3e50;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+
+        .mode-buttons {
+            display: flex;
+            gap: 30px;
+            justify-content: center;
+        }
+
+        .mode-button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 30px 50px;
+            font-size: 24px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+        }
+
+        .mode-button:hover {
+            background: #2980b9;
+            transform: scale(1.05);
+        }
+
         .start-screen {
+            display: none;
             position: absolute;
             top: 50%;
             left: 50%;
@@ -159,9 +202,18 @@
         </div>
     </div>
 
+    <div class="player-select-screen" id="playerSelectScreen">
+        <h2>💰 Catch Money! 💰</h2>
+        <p style="margin-bottom: 30px; font-size: 18px; color: #7f8c8d;">Choose Game Mode:</p>
+        <div class="mode-buttons">
+            <button class="mode-button" onclick="selectMode(1)">1 Player</button>
+            <button class="mode-button" onclick="selectMode(2)">2 Players</button>
+        </div>
+    </div>
+
     <div class="start-screen" id="startScreen">
         <h2>💰 Catch Money! 💰</h2>
-        <p>Catch diamonds 💎, orange diamonds 🔶, and $100 bills 💵<br>
+        <p id="instructionText">Catch diamonds 💎, orange diamonds 🔶, and $100 bills 💵<br>
         Avoid the bombs 💣 or it's GAME OVER!<br>
         Power-ups: ⭐ = Big Bucket, 🪙 = Full-Screen Stick!<br>
         You have 60 seconds!<br><br>
@@ -187,6 +239,7 @@
         let gameActive = false;
         let gameStarted = false;
         let timeLeft = 60;
+        let gameMode = 1; // 1 = single player, 2 = two player
         let score1 = {
             diamonds: 0,
             hexagons: 0,
@@ -247,7 +300,12 @@
             walkCounter: 0,
             direction: 'right',
             alive: true,
-            color: '#FFA500' // Orange player
+            color: '#FFA500', // Orange player
+            bucketSize: 1, // 1 = normal, 4 = enlarged
+            bucketSizeTimer: null,
+            stickActive: false,
+            stickTimer: null,
+            stickStartTime: 0
         };
 
         // Player 2 object (A/D keys)
@@ -263,11 +321,16 @@
             walkCounter: 0,
             direction: 'right',
             alive: true,
-            color: '#00BFFF' // Blue player
+            color: '#00BFFF', // Blue player
+            bucketSize: 1,
+            bucketSizeTimer: null,
+            stickActive: false,
+            stickTimer: null,
+            stickStartTime: 0
         };
 
         // Backwards compatibility - point to player1
-        const player = player1;
+        let player = player1;
 
         // Falling items array
         let fallingItems = [];
@@ -1131,23 +1194,37 @@
             }
         }
 
-        // Draw stick (full screen width)
-        function drawStick(playerCenterX, playerY) {
-            // Draw a long horizontal stick spanning the entire screen
+        // Draw stick (full screen width) with player color
+        function drawStick(playerObj) {
+            const playerCenterX = playerObj.x + playerObj.width/2;
+            const playerY = playerObj.y;
             const stickY = playerY - 15;
             const stickHeight = 8;
 
             // Calculate remaining time percentage for fading effect
-            const elapsed = Date.now() - stickStartTime;
-            const remaining = stickDuration - elapsed;
-            const fadePercent = Math.max(0, remaining / stickDuration); // 1.0 at start, 0.0 at end
+            const elapsed = Date.now() - playerObj.stickStartTime;
+            const remaining = 10000 - elapsed;
+            const fadePercent = Math.max(0, remaining / 10000); // 1.0 at start, 0.0 at end
 
-            // Stick body - brown wood color with fading opacity
-            ctx.fillStyle = `rgba(139, 69, 19, ${fadePercent})`;
+            // Extract RGB from player color
+            let r, g, b;
+            if (playerObj.color === '#FFA500') { // Orange
+                r = 255; g = 165; b = 0;
+            } else if (playerObj.color === '#00BFFF') { // Blue
+                r = 0; g = 191; b = 255;
+            } else {
+                r = 139; g = 69; b = 19; // Default brown
+            }
+
+            // Stick body - player's shirt color with fading opacity
+            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${fadePercent})`;
             ctx.fillRect(0, stickY, canvas.width, stickHeight);
 
             // Add some texture/grain to the stick with fading
-            ctx.strokeStyle = `rgba(101, 67, 33, ${fadePercent})`;
+            const darkR = Math.floor(r * 0.7);
+            const darkG = Math.floor(g * 0.7);
+            const darkB = Math.floor(b * 0.7);
+            ctx.strokeStyle = `rgba(${darkR}, ${darkG}, ${darkB}, ${fadePercent})`;
             ctx.lineWidth = 1;
             for (let i = 0; i < canvas.width; i += 20) {
                 ctx.beginPath();
@@ -1156,8 +1233,11 @@
                 ctx.stroke();
             }
 
-            // Highlight where player is holding it with fading golden color
-            ctx.fillStyle = `rgba(218, 165, 32, ${fadePercent})`;
+            // Highlight where player is holding it with fading brighter color
+            const brightR = Math.min(255, Math.floor(r * 1.3));
+            const brightG = Math.min(255, Math.floor(g * 1.3));
+            const brightB = Math.min(255, Math.floor(b * 1.3));
+            ctx.fillStyle = `rgba(${brightR}, ${brightG}, ${brightB}, ${fadePercent})`;
             ctx.fillRect(playerCenterX - 15, stickY - 3, 30, stickHeight + 6);
         }
 
@@ -1331,10 +1411,12 @@
             }
         }
 
-        // Update both players
+        // Update players based on game mode
         function updatePlayer() {
             updatePlayerMovement(player1, 'ArrowLeft', 'ArrowRight');
-            updatePlayerMovement(player2, 'a', 'd');
+            if (gameMode === 2) {
+                updatePlayerMovement(player2, 'a', 'd');
+            }
         }
 
         // Update falling items
@@ -1342,9 +1424,9 @@
             for (let i = fallingItems.length - 1; i >= 0; i--) {
                 fallingItems[i].y += fallingItems[i].speed;
 
-                // Check collision with both players
+                // Check collision with players based on game mode
                 const collision1 = player1.alive && checkCollision(fallingItems[i], player1);
-                const collision2 = player2.alive && checkCollision(fallingItems[i], player2);
+                const collision2 = (gameMode === 2) && player2.alive && checkCollision(fallingItems[i], player2);
 
                 if (collision1 || collision2) {
                     const hitPlayer = collision1 ? player1 : player2;
@@ -1361,37 +1443,55 @@
                         // Remove the bomb from the screen
                         fallingItems.splice(i, 1);
 
-                        // Check if both players are dead
-                        if (!player1.alive && !player2.alive) {
-                            // Both dead - game over!
+                        // Handle death based on game mode
+                        if (gameMode === 1) {
+                            // Single player - game over!
                             gameActive = false;
                             clearInterval(timerInterval);
                             clearInterval(spawnInterval);
                             stopBackgroundMusic();
 
                             setTimeout(() => {
-                                endGame();
-                            }, 3000);
-                        } else if (!player1.alive) {
-                            // Player 1 dead, Player 2 wins!
-                            gameActive = false;
-                            clearInterval(timerInterval);
-                            clearInterval(spawnInterval);
-                            stopBackgroundMusic();
-
-                            setTimeout(() => {
-                                declareWinner(2);
+                                document.getElementById('gameOverTitle').textContent = '💥 BOOM! Game Over! 💥';
+                                document.getElementById('final-diamond').textContent = score1.diamonds;
+                                document.getElementById('final-hexagon').textContent = score1.hexagons;
+                                document.getElementById('final-bill').textContent = score1.bills;
+                                document.getElementById('gameOver').style.display = 'block';
                             }, 3000);
                         } else {
-                            // Player 2 dead, Player 1 wins!
-                            gameActive = false;
-                            clearInterval(timerInterval);
-                            clearInterval(spawnInterval);
-                            stopBackgroundMusic();
+                            // 2 player mode
+                            // Check if both players are dead
+                            if (!player1.alive && !player2.alive) {
+                                // Both dead - game over!
+                                gameActive = false;
+                                clearInterval(timerInterval);
+                                clearInterval(spawnInterval);
+                                stopBackgroundMusic();
 
-                            setTimeout(() => {
-                                declareWinner(1);
-                            }, 3000);
+                                setTimeout(() => {
+                                    endGame();
+                                }, 3000);
+                            } else if (!player1.alive) {
+                                // Player 1 dead, Player 2 wins!
+                                gameActive = false;
+                                clearInterval(timerInterval);
+                                clearInterval(spawnInterval);
+                                stopBackgroundMusic();
+
+                                setTimeout(() => {
+                                    declareWinner(2);
+                                }, 3000);
+                            } else {
+                                // Player 2 dead, Player 1 wins!
+                                gameActive = false;
+                                clearInterval(timerInterval);
+                                clearInterval(spawnInterval);
+                                stopBackgroundMusic();
+
+                                setTimeout(() => {
+                                    declareWinner(1);
+                                }, 3000);
+                            }
                         }
 
                         return;
@@ -1399,21 +1499,21 @@
 
                     // Check if it's a gold bomb (power-up!)
                     if (fallingItems[i].type === ITEM_TYPES.GOLD_BOMB) {
-                        // Power up! Enlarge bucket
+                        // Power up! Enlarge bucket for THIS player only
                         playCatchSound();
 
                         // Clear existing timer if any
-                        if (bucketSizeTimer) {
-                            clearTimeout(bucketSizeTimer);
+                        if (hitPlayer.bucketSizeTimer) {
+                            clearTimeout(hitPlayer.bucketSizeTimer);
                         }
 
-                        // Enlarge bucket
-                        bucketSize = 4;
+                        // Enlarge bucket for this player
+                        hitPlayer.bucketSize = 4;
 
                         // Set timer to reset bucket size after 10 seconds
-                        bucketSizeTimer = setTimeout(() => {
-                            bucketSize = 1;
-                            bucketSizeTimer = null;
+                        hitPlayer.bucketSizeTimer = setTimeout(() => {
+                            hitPlayer.bucketSize = 1;
+                            hitPlayer.bucketSizeTimer = null;
                         }, 10000);
 
                         fallingItems.splice(i, 1);
@@ -1422,23 +1522,23 @@
 
                     // Check if it's a coin (stick power-up!)
                     if (fallingItems[i].type === ITEM_TYPES.COIN) {
-                        // Power up! Activate stick
+                        // Power up! Activate stick for THIS player only
                         playCatchSound();
 
                         // Clear existing timer if any
-                        if (stickTimer) {
-                            clearTimeout(stickTimer);
+                        if (hitPlayer.stickTimer) {
+                            clearTimeout(hitPlayer.stickTimer);
                         }
 
-                        // Activate stick (replaces bucket)
-                        stickActive = true;
-                        stickStartTime = Date.now(); // Record when stick was activated
+                        // Activate stick (replaces bucket) for this player
+                        hitPlayer.stickActive = true;
+                        hitPlayer.stickStartTime = Date.now(); // Record when stick was activated
 
                         // Set timer to deactivate stick after 10 seconds
-                        stickTimer = setTimeout(() => {
-                            stickActive = false;
-                            stickTimer = null;
-                        }, stickDuration);
+                        hitPlayer.stickTimer = setTimeout(() => {
+                            hitPlayer.stickActive = false;
+                            hitPlayer.stickTimer = null;
+                        }, 10000);
 
                         fallingItems.splice(i, 1);
                         continue;
@@ -1482,7 +1582,7 @@
             let playerBottom = player.y + player.height;
 
             // Stick mode: full screen width collision for catchable items only
-            if (stickActive && !bucketDropped) {
+            if (player.stickActive && !bucketDropped) {
                 // Stick only catches diamonds, orange diamonds, and bills
                 if (item.type === ITEM_TYPES.DIAMOND ||
                     item.type === ITEM_TYPES.ORANGE_DIAMOND ||
@@ -1503,10 +1603,10 @@
             }
 
             // Expand collision area when bucket is enlarged
-            if (bucketSize > 1 && !bucketDropped && !stickActive) {
+            if (player.bucketSize > 1 && !bucketDropped && !player.stickActive) {
                 // Bucket is held above head, so expand the top collision area
-                const bucketWidth = 15 * bucketSize;
-                const bucketHeight = 15 * bucketSize;
+                const bucketWidth = 15 * player.bucketSize;
+                const bucketHeight = 15 * player.bucketSize;
                 const centerX = player.x + player.width/2;
                 playerLeft = centerX - bucketWidth;
                 playerRight = centerX + bucketWidth;
@@ -1736,34 +1836,36 @@
             }
 
             if (!gameActive && !explosionActive && !playerFalling) {
-                // Even when game is not active, show both players standing
-                if (gameStarted) {
-                    // Draw both players
-                    if (player1.alive) {
-                        const oldPlayer = player;
-                        player = player1;
-                        drawPlayer();
-                        player = oldPlayer;
-                    }
-                    if (player2.alive) {
-                        const oldPlayer = player;
-                        player = player2;
-                        drawPlayer();
-                        player = oldPlayer;
-                    }
+                // Always show players standing (even on start screen)
+                // Draw player 1
+                if (player1.alive) {
+                    const oldPlayer = player;
+                    player = player1;
+                    drawPlayer();
+                    player = oldPlayer;
+                }
+                // Draw player 2 only in 2-player mode
+                if (gameMode === 2 && player2.alive) {
+                    const oldPlayer = player;
+                    player = player2;
+                    drawPlayer();
+                    player = oldPlayer;
+                }
 
-                    // Draw stick or bucket above player's head if not dropped
-                    if (!bucketDropped) {
-                        if (stickActive) {
-                            drawStick(player1.x + player1.width/2, player1.y);
-                        } else {
-                            const bucketX = player1.x + player1.width/2;
-                            // Position bucket higher when enlarged to avoid covering face
-                            const bucketY = player1.y - 10 - (bucketSize > 1 ? 40 : 0);
-                            drawBucket(bucketX, bucketY, false, bucketSize);
-                        }
+                // Draw buckets above players
+                if (!bucketDropped) {
+                    if (player1.alive) {
+                        const bucketX1 = player1.x + player1.width/2;
+                        const bucketY1 = player1.y - 10 - (player1.bucketSize > 1 ? 40 : 0);
+                        drawBucket(bucketX1, bucketY1, false, player1.bucketSize);
+                    }
+                    if (gameMode === 2 && player2.alive) {
+                        const bucketX2 = player2.x + player2.width/2;
+                        const bucketY2 = player2.y - 10 - (player2.bucketSize > 1 ? 40 : 0);
+                        drawBucket(bucketX2, bucketY2, false, player2.bucketSize);
                     }
                 }
+
                 requestAnimationFrame(gameLoop);
                 return;
             }
@@ -1794,36 +1896,90 @@
                 }
             }
 
-            // Draw both players
+            // Draw players based on game mode
             if (player1.alive) {
                 const oldPlayer = player;
                 player = player1; // Temporarily switch context
                 drawPlayer();
                 player = oldPlayer;
             }
-            if (player2.alive) {
+            if (gameMode === 2 && player2.alive) {
                 const oldPlayer = player;
                 player = player2; // Temporarily switch context
                 drawPlayer();
                 player = oldPlayer;
             }
 
-            // Draw stick or bucket above both players' heads if alive and not dropped
+            // Draw stick or bucket above players' heads if alive and not dropped
             if (!bucketDropped && !playerFalling) {
-                if (stickActive) {
-                    // Stick is full screen, so just draw it once
-                    drawStick(player1.x + player1.width/2, player1.y);
-                } else {
-                    // Draw bucket for both players
-                    if (player1.alive) {
-                        const bucketX1 = player1.x + player1.width/2;
-                        const bucketY1 = player1.y - 10 - (bucketSize > 1 ? 40 : 0);
-                        drawBucket(bucketX1, bucketY1, false, bucketSize);
+                // Check if any players have sticks
+                const p1HasStick = player1.alive && player1.stickActive;
+                const p2HasStick = gameMode === 2 && player2.alive && player2.stickActive;
+
+                if (p1HasStick || p2HasStick) {
+                    // Draw sticks with player colors
+                    if (p1HasStick && p2HasStick) {
+                        // Both have sticks - draw mixed color stick
+                        const stickY = player1.y - 15;
+                        const stickHeight = 8;
+
+                        // Calculate fade percents for both
+                        const elapsed1 = Date.now() - player1.stickStartTime;
+                        const remaining1 = 10000 - elapsed1;
+                        const fade1 = Math.max(0, remaining1 / 10000);
+
+                        const elapsed2 = Date.now() - player2.stickStartTime;
+                        const remaining2 = 10000 - elapsed2;
+                        const fade2 = Math.max(0, remaining2 / 10000);
+
+                        const avgFade = (fade1 + fade2) / 2;
+
+                        // Mixed color: Orange(255,165,0) + Blue(0,191,255) / 2 = (127,178,127) greenish
+                        const mixR = Math.floor((255 + 0) / 2);
+                        const mixG = Math.floor((165 + 191) / 2);
+                        const mixB = Math.floor((0 + 255) / 2);
+
+                        // Draw mixed color stick
+                        ctx.fillStyle = `rgba(${mixR}, ${mixG}, ${mixB}, ${avgFade})`;
+                        ctx.fillRect(0, stickY, canvas.width, stickHeight);
+
+                        // Texture
+                        const darkMixR = Math.floor(mixR * 0.7);
+                        const darkMixG = Math.floor(mixG * 0.7);
+                        const darkMixB = Math.floor(mixB * 0.7);
+                        ctx.strokeStyle = `rgba(${darkMixR}, ${darkMixG}, ${darkMixB}, ${avgFade})`;
+                        ctx.lineWidth = 1;
+                        for (let i = 0; i < canvas.width; i += 20) {
+                            ctx.beginPath();
+                            ctx.moveTo(i, stickY);
+                            ctx.lineTo(i, stickY + stickHeight);
+                            ctx.stroke();
+                        }
+
+                        // Highlights where each player holds
+                        ctx.fillStyle = `rgba(255, 165, 0, ${fade1})`; // Orange for P1
+                        ctx.fillRect(player1.x + player1.width/2 - 15, stickY - 3, 30, stickHeight + 6);
+
+                        ctx.fillStyle = `rgba(0, 191, 255, ${fade2})`; // Blue for P2
+                        ctx.fillRect(player2.x + player2.width/2 - 15, stickY - 3, 30, stickHeight + 6);
+                    } else if (p1HasStick) {
+                        // Only player 1 has stick
+                        drawStick(player1);
+                    } else {
+                        // Only player 2 has stick
+                        drawStick(player2);
                     }
-                    if (player2.alive) {
+                } else {
+                    // Draw buckets for players who don't have sticks
+                    if (player1.alive && !player1.stickActive) {
+                        const bucketX1 = player1.x + player1.width/2;
+                        const bucketY1 = player1.y - 10 - (player1.bucketSize > 1 ? 40 : 0);
+                        drawBucket(bucketX1, bucketY1, false, player1.bucketSize);
+                    }
+                    if (gameMode === 2 && player2.alive && !player2.stickActive) {
                         const bucketX2 = player2.x + player2.width/2;
-                        const bucketY2 = player2.y - 10 - (bucketSize > 1 ? 40 : 0);
-                        drawBucket(bucketX2, bucketY2, false, bucketSize);
+                        const bucketY2 = player2.y - 10 - (player2.bucketSize > 1 ? 40 : 0);
+                        drawBucket(bucketX2, bucketY2, false, player2.bucketSize);
                     }
                 }
             }
@@ -1914,24 +2070,56 @@
                 nextRainTimer = null;
             }
 
-            // Calculate money for both players
-            const money1 = calculateMoney(score1);
-            const money2 = calculateMoney(score2);
-
-            // Determine winner
-            if (money1 > money2) {
-                document.getElementById('gameOverTitle').textContent = `🏆 Player 1 Wins! 🏆 ($${money1} vs $${money2})`;
-            } else if (money2 > money1) {
-                document.getElementById('gameOverTitle').textContent = `🏆 Player 2 Wins! 🏆 ($${money2} vs $${money1})`;
+            if (gameMode === 1) {
+                // Single player - just show score
+                document.getElementById('gameOverTitle').textContent = "Time's Up!";
+                document.getElementById('final-diamond').textContent = score1.diamonds;
+                document.getElementById('final-hexagon').textContent = score1.hexagons;
+                document.getElementById('final-bill').textContent = score1.bills;
             } else {
-                document.getElementById('gameOverTitle').textContent = `🤝 Tie Game! 🤝 (Both $${money1})`;
+                // 2 player mode - calculate winner
+                const money1 = calculateMoney(score1);
+                const money2 = calculateMoney(score2);
+
+                // Determine winner
+                if (money1 > money2) {
+                    document.getElementById('gameOverTitle').textContent = `🏆 Player 1 Wins! 🏆 ($${money1} vs $${money2})`;
+                } else if (money2 > money1) {
+                    document.getElementById('gameOverTitle').textContent = `🏆 Player 2 Wins! 🏆 ($${money2} vs $${money1})`;
+                } else {
+                    document.getElementById('gameOverTitle').textContent = `🤝 Tie Game! 🤝 (Both $${money1})`;
+                }
+
+                document.getElementById('final-diamond').textContent = `P1: ${score1.diamonds} | P2: ${score2.diamonds}`;
+                document.getElementById('final-hexagon').textContent = `P1: ${score1.hexagons} | P2: ${score2.hexagons}`;
+                document.getElementById('final-bill').textContent = `P1: ${score1.bills} | P2: ${score2.bills}`;
             }
 
-            document.getElementById('final-diamond').textContent = `P1: ${score1.diamonds} | P2: ${score2.diamonds}`;
-            document.getElementById('final-hexagon').textContent = `P1: ${score1.hexagons} | P2: ${score2.hexagons}`;
-            document.getElementById('final-bill').textContent = `P1: ${score1.bills} | P2: ${score2.bills}`;
-
             document.getElementById('gameOver').style.display = 'block';
+        }
+
+        // Select game mode
+        function selectMode(mode) {
+            gameMode = mode;
+            document.getElementById('playerSelectScreen').style.display = 'none';
+            document.getElementById('startScreen').style.display = 'block';
+
+            // Update instructions based on mode
+            const instructionText = document.getElementById('instructionText');
+            if (mode === 1) {
+                instructionText.innerHTML = `Catch diamonds 💎, orange diamonds 🔶, and $100 bills 💵<br>
+                Avoid the bombs 💣 or it's GAME OVER!<br>
+                Power-ups: ⭐ = Big Bucket, 🪙 = Full-Screen Stick!<br>
+                You have 60 seconds!<br><br>
+                Use ← → arrow keys to move`;
+            } else {
+                instructionText.innerHTML = `👥 2 PLAYER MODE 👥<br>
+                Catch diamonds 💎 ($200), orange diamonds 🔶 ($300), and $100 bills 💵<br>
+                Avoid the bombs 💣 or you die!<br>
+                Power-ups: ⭐ = Big Bucket, 🪙 = Full-Screen Stick (shared!)<br>
+                You have 60 seconds!<br><br>
+                Player 1 (Orange): ← → arrow keys | Player 2 (Blue): A D keys`;
+            }
         }
 
         // Start game from button
@@ -1973,12 +2161,6 @@
             bucketDropped = false;
             bucketX = 0;
             bucketY = 0;
-            bucketSize = 1;
-            bucketSizeTimer = null;
-
-            // Reset stick
-            stickActive = false;
-            stickTimer = null;
 
             // Reset rain
             isRaining = false;
@@ -1997,11 +2179,31 @@
             player1.y = canvas.height - 135;
             player1.velocityX = 0;
             player1.alive = true;
+            player1.bucketSize = 1;
+            if (player1.bucketSizeTimer) {
+                clearTimeout(player1.bucketSizeTimer);
+                player1.bucketSizeTimer = null;
+            }
+            player1.stickActive = false;
+            if (player1.stickTimer) {
+                clearTimeout(player1.stickTimer);
+                player1.stickTimer = null;
+            }
 
             player2.x = (canvas.width * 2) / 3 - 30;
             player2.y = canvas.height - 135;
             player2.velocityX = 0;
             player2.alive = true;
+            player2.bucketSize = 1;
+            if (player2.bucketSizeTimer) {
+                clearTimeout(player2.bucketSizeTimer);
+                player2.bucketSizeTimer = null;
+            }
+            player2.stickActive = false;
+            if (player2.stickTimer) {
+                clearTimeout(player2.stickTimer);
+                player2.stickTimer = null;
+            }
 
             // Set player reference to player1
             player.x = player1.x;
@@ -2015,7 +2217,8 @@
 
             document.getElementById('gameOver').style.display = 'none';
 
-            startGame();
+            // Go back to player selection screen
+            document.getElementById('playerSelectScreen').style.display = 'block';
         }
 
         // Start game
